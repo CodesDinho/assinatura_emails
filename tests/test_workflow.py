@@ -211,6 +211,7 @@ def test_employee_can_update_phone_before_generating_signature(tmp_path, monkeyp
         assert confirmation.status_code == 200
         assert 'name="phone"' in confirmation.text
         assert 'value="1111"' in confirmation.text
+        assert "Caso seja necessária a edição de cargo" in confirmation.text
         token = confirmation.text.split('name="csrf_token" value="', 1)[1].split('"', 1)[0]
         sent = client.post("/solicitar", data={
             "csrf_token": token,

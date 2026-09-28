@@ -17,6 +17,7 @@
     <label for="phone">Número de celular</label>
     <input id="phone" name="phone" type="tel" maxlength="30" value="{{ employee['phone'] or '' }}" placeholder="+55 41 99999-9999" aria-describedby="phone-help{% if phone_error %} phone-error{% endif %}">
     <small id="phone-help" class="field-help">Confira ou corrija o número. A alteração será salva na planilha oficial.</small>
+    <small class="field-help">Caso seja necessária a edição de cargo, entre em contato com o RH.</small>
     {% if phone_error %}<p id="phone-error" class="field-error">{{ phone_error }}</p>{% endif %}
     <button type="submit">Enviar minha assinatura</button>
   </form>
