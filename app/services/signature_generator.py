@@ -47,27 +47,25 @@ def _paste(image, asset_name, box, crop_transparent=False):
 
 
 def _draw_powerpoint_art(show_phone=False):
-    """Rebuild the static art from the editable objects in the approved PPTX."""
-    image = Image.new("RGBA", SIGNATURE_SIZE, WHITE + (255,))
+    """Render the static art and icons at the coordinates of the approved PPTX."""
+    background = _asset("image1.png").resize((532, 174), Image.Resampling.LANCZOS)
+    image = background.crop((0, 0, 532, 173))
     draw = ImageDraw.Draw(image)
 
-    # Bottom flourish and patterned crescent.
-    draw.polygon(((145, 173), (193, 105), (215, 136), (241, 173)), fill=BRAND_BLUE + (255,))
-    draw.rectangle((-2, -3, 165, 176), fill=WHITE + (255,))
-    _paste(image, "image1.png", (2, 0, 221, 176), crop_transparent=True)
-
-    # Main left plate and official white logo extracted from the PPTX.
-    # The large circle in the source has no fill; the patterned crescent must remain visible.
-    draw.rounded_rectangle((-93, 10, 164, 169), radius=22, fill=BRAND_BLUE + (255,))
-    _paste(image, "image2.png", (14, 47, 94, 38))
-
-    # Contact icons from the current approved PowerPoint.
+    # Contact icons from the approved PowerPoint.
     contact_icons = [(83, "image12.png"), (109, "image13.png")]
     if show_phone:
         contact_icons.append((137, "image15.png"))
     for y, asset in contact_icons:
         draw.rounded_rectangle((243, y, 261, y + 18), radius=2, fill=ICON_BLUE + (255,))
         _paste(image, asset, (247, y + 4, 10, 10))
+
+    # Social-media strip restored in the new approved layout.
+    _paste(image, "image10.png", (409, 150, 17, 17))
+    draw.ellipse((432, 150, 449, 167), fill=BRAND_BLUE + (255,))
+    _paste(image, "image9.png", (436, 153, 10, 10))
+    _paste(image, "image7.png", (456, 150, 17, 17))
+    _paste(image, "image5.png", (478, 150, 17, 17))
     return image
 
 
@@ -93,13 +91,14 @@ def generate_signature_image(name, role, email, output_path, phone=""):
     detail_font = _font(8)
 
     # Positions, colors and relative sizes converted from the PPTX EMU coordinates.
-    draw.text((243, 25), name, font=name_font, fill=BRAND_BLUE)
+    draw.text((246, 31), name, font=name_font, fill=BRAND_BLUE)
     if role:
-        draw.text((242, 48), role, font=role_font, fill=SECONDARY_TEXT)
-    draw.text((267, 87), email, font=email_font, fill=SECONDARY_TEXT)
-    draw.text((267, 113), "www.dinhodistribuidora.com.br", font=detail_font, fill=SECONDARY_TEXT)
+        draw.text((245, 52), role, font=role_font, fill=SECONDARY_TEXT)
+    draw.line((245, 65, 323, 65), fill=BRAND_BLUE, width=1)
+    draw.text((273, 91), email, font=email_font, fill=SECONDARY_TEXT)
+    draw.text((270, 117), "www.dinhodistribuidora.com.br", font=detail_font, fill=SECONDARY_TEXT)
     if phone:
-        draw.text((267, 140), phone, font=detail_font, fill=SECONDARY_TEXT)
+        draw.text((270, 145), phone, font=detail_font, fill=SECONDARY_TEXT)
 
     image.convert("RGB").save(output, format="PNG", optimize=True)
     return output

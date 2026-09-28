@@ -44,10 +44,8 @@ def test_generate_signature_image_creates_png(tmp_path):
 
     with Image.open(result) as generated:
         assert generated.size == (532, 173)
-        # The latest approved PPT no longer has the social-media icon strip.
-        assert generated.crop((400, 145, 500, 173)).getcolors(maxcolors=1) == [
-            (100 * 28, (255, 255, 255))
-        ]
+        # The new approved PPT restores the social-media icon strip.
+        assert generated.crop((400, 145, 500, 173)).getcolors(maxcolors=1) is None
 
 
 def test_public_lookup_route(tmp_path):
