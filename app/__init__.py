@@ -16,12 +16,13 @@ def create_app(test_config=None):
 
     app.config.from_mapping(
         SECRET_KEY=os.getenv("SECRET_KEY", "dev-secret-key"),
-        DATABASE_PATH=os.getenv("DATABASE_PATH", str(INSTANCE_DIR / "employees.sqlite3")),
         EMPLOYEE_WORKBOOK_PATH=os.getenv(
             "EMPLOYEE_WORKBOOK_PATH",
             str(BASE_DIR / "data" / "colaboradores_ativos_2409.xlsx"),
         ),
         ADMIN_USERS_PATH=os.getenv("ADMIN_USERS_PATH", str(BASE_DIR / "config" / "users.json")),
+        REQUEST_LOG_PATH=os.getenv("REQUEST_LOG_PATH", str(INSTANCE_DIR / "request_logs.jsonl")),
+        GENERATED_FILES_PATH=os.getenv("GENERATED_FILES_PATH", str(INSTANCE_DIR / "generated")),
         ADMIN_USERNAME=os.getenv("ADMIN_USERNAME", "admin"),
         ADMIN_PASSWORD_HASH=os.getenv("ADMIN_PASSWORD_HASH", ""),
         MAX_REQUESTS_PER_MINUTE=int(os.getenv("MAX_REQUESTS_PER_MINUTE", "20")),
@@ -44,19 +45,16 @@ def create_app(test_config=None):
         app.config.update(test_config)
 
     INSTANCE_DIR.mkdir(exist_ok=True)
-    from app.db import initialize_database, seed_local_employee_data
     from app.services.workbook_store import ensure_employee_columns
 
-    initialize_database(app.config["DATABASE_PATH"])
-    if app.config.get("SEED_LOCAL_DATA", True):
-        if Path(app.config["EMPLOYEE_WORKBOOK_PATH"]).exists():
-            ensure_employee_columns(app.config["EMPLOYEE_WORKBOOK_PATH"])
-        workbook_dir = Path(app.config["EMPLOYEE_WORKBOOK_PATH"]).parent
-        seed_local_employee_data(app.config["DATABASE_PATH"], str(workbook_dir))
+    if Path(app.config["EMPLOYEE_WORKBOOK_PATH"]).exists():
+        ensure_employee_columns(app.config["EMPLOYEE_WORKBOOK_PATH"])
     register_routes(app)
 
     @app.route("/health")
     def health():
-        return jsonify({"status": "ok", "database": app.config["DATABASE_PATH"]})
+        workbook = Path(app.config["EMPLOYEE_WORKBOOK_PATH"])
+        available = workbook.exists()
+        return jsonify({"status": "ok" if available else "error", "workbook": str(workbook), "workbook_available": available}), 200 if available else 503
 
     return app

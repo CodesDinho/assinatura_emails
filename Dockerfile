@@ -2,8 +2,9 @@ FROM python:3.12-slim
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
-    DATABASE_PATH=/app/instance/employees.sqlite3 \
     EMPLOYEE_WORKBOOK_PATH=/app/data/colaboradores_ativos_2409.xlsx \
+    REQUEST_LOG_PATH=/app/instance/request_logs.jsonl \
+    GENERATED_FILES_PATH=/app/instance/generated \
     ADMIN_USERS_PATH=/app/config/users.json
 
 WORKDIR /app

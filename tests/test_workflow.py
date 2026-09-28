@@ -1,12 +1,11 @@
 from pathlib import Path
 
 from app import create_app
-from app.db import seed_local_employee_data
 from app.services.email_sender import resolve_smtp_settings
 from app.services.employee_importer import build_employee_record, normalize_email, validate_employee_row
 from app.services.signature_generator import generate_signature_image
 from app.services.admin_auth import authenticate_user
-from app.services.workbook_store import save_employee_to_workbook
+from app.services.workbook_store import find_employee_by_email, list_employees, save_employee_to_workbook
 
 
 def test_normalize_email():
@@ -51,7 +50,13 @@ def test_generate_signature_image_creates_png(tmp_path):
 
 
 def test_public_lookup_route(tmp_path):
-    app = create_app(test_config={"TESTING": True, "DATABASE_PATH": str(tmp_path / "db.sqlite3")})
+    from openpyxl import Workbook
+
+    workbook_path = tmp_path / "colaboradores.xlsx"
+    workbook = Workbook()
+    workbook.active.append(["Nome", "Cargo", "Email", "Celular", "Ativo"])
+    workbook.save(workbook_path)
+    app = create_app(test_config={"TESTING": True, "EMPLOYEE_WORKBOOK_PATH": str(workbook_path)})
     with app.test_client() as client:
         response = client.get("/health")
         assert response.status_code == 200
@@ -61,59 +66,21 @@ def test_public_lookup_route(tmp_path):
         assert "Área administrativa" in home.text
 
 
-def test_seed_local_employee_data(tmp_path):
+def test_workbook_is_the_employee_source_of_truth(tmp_path):
     from openpyxl import Workbook
 
-    data_dir = tmp_path / "data"
-    data_dir.mkdir()
+    workbook_path = tmp_path / "colaboradores.xlsx"
     workbook = Workbook()
     workbook.active.append(["Nome", "Cargo", "Email", "Celular", "Ativo"])
-    workbook.active.append([
-        "Adriano Jarochevski",
-        "Analista",
-        "adriano.jarochevski@dinhodistribuidora.com.br",
-        "+55 41 99999-0000",
-        "SIM",
-    ])
-    workbook.save(data_dir / "colaboradores.xlsx")
-    database_path = tmp_path / "seed.sqlite3"
-    rows = seed_local_employee_data(str(database_path), str(data_dir))
-    assert rows > 0
+    workbook.active.append(["Pessoa Ativa", "Analista", "ativa@empresa.com", "123", "SIM"])
+    workbook.active.append(["Pessoa sem E-mail", "Operador", "", "", "SIM"])
+    workbook.active.append(["Pessoa Inativa", "Gestor", "inativa@empresa.com", "", "NÃO"])
+    workbook.save(workbook_path)
 
-    row = __import__("app.db", fromlist=["get_connection"]).get_connection(str(database_path)).execute(
-        "SELECT full_name, job_title, email FROM employees WHERE email='adriano.jarochevski@dinhodistribuidora.com.br' LIMIT 1"
-    ).fetchone()
-    assert row is not None
-    assert row["job_title"] not in ("", "Colaborador")
-
-
-def test_seed_does_not_delete_persisted_employees(tmp_path):
-    import sqlite3
-    from openpyxl import Workbook
-
-    data_dir = tmp_path / "data"
-    data_dir.mkdir()
-    workbook = Workbook()
-    workbook.active.append(["Nome", "Cargo", "Email", "Ativo"])
-    workbook.active.append(["Pessoa da Planilha", "Analista", "planilha@empresa.com", "SIM"])
-    workbook.save(data_dir / "colaboradores.xlsx")
-
-    database_path = tmp_path / "employees.sqlite3"
-    seed_local_employee_data(str(database_path), str(data_dir))
-    connection = sqlite3.connect(database_path)
-    connection.execute(
-        "INSERT INTO employees (full_name, job_title, email, active) VALUES (?, ?, ?, ?)",
-        ("Cadastro Administrativo", "Gestor", "admin@empresa.com", 1),
-    )
-    connection.commit()
-    connection.close()
-
-    seed_local_employee_data(str(database_path), str(data_dir))
-
-    connection = sqlite3.connect(database_path)
-    emails = {row[0] for row in connection.execute("SELECT email FROM employees")}
-    connection.close()
-    assert emails == {"planilha@empresa.com", "admin@empresa.com"}
+    employees = list_employees(workbook_path)
+    assert len(employees) == 3
+    assert find_employee_by_email(workbook_path, "ATIVA@EMPRESA.COM")["full_name"] == "Pessoa Ativa"
+    assert find_employee_by_email(workbook_path, "inativa@empresa.com") is None
 
 
 def test_resolve_smtp_settings_supports_sgq_env_names(monkeypatch):
@@ -187,10 +154,10 @@ def test_admin_area_requires_login_and_saves_new_employee_to_excel(tmp_path):
     app = create_app(test_config={
         "TESTING": True,
         "SECRET_KEY": "test-secret",
-        "DATABASE_PATH": str(tmp_path / "db.sqlite3"),
         "EMPLOYEE_WORKBOOK_PATH": str(workbook_path),
         "ADMIN_USERS_PATH": str(users_path),
-        "SEED_LOCAL_DATA": False,
+        "REQUEST_LOG_PATH": str(tmp_path / "requests.jsonl"),
+        "GENERATED_FILES_PATH": str(tmp_path / "generated"),
     })
 
     with app.test_client() as client:
@@ -215,3 +182,5 @@ def test_admin_area_requires_login_and_saves_new_employee_to_excel(tmp_path):
     saved = load_workbook(workbook_path, data_only=True).active
     headers = [cell.value for cell in saved[1]]
     assert saved.cell(2, headers.index("Celular") + 1).value == "+55 41 98888-7777"
+    assert len(list(tmp_path.joinpath("backups").glob("*.xlsx"))) >= 1
+    assert not list(tmp_path.glob("*.sqlite*"))

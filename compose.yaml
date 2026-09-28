@@ -6,8 +6,9 @@ services:
     environment:
       SECRET_KEY: ${SECRET_KEY:?SECRET_KEY obrigatoria}
       APP_BASE_URL: ${APP_BASE_URL:-http://10.1.1.153:8505}
-      DATABASE_PATH: /app/instance/employees.sqlite3
       EMPLOYEE_WORKBOOK_PATH: /app/data/colaboradores_ativos_2409.xlsx
+      REQUEST_LOG_PATH: /app/instance/request_logs.jsonl
+      GENERATED_FILES_PATH: /app/instance/generated
       ADMIN_USERS_PATH: /app/config/users.json
       SESSION_COOKIE_SECURE: ${SESSION_COOKIE_SECURE:-false}
       SMTP_HOST: ${SMTP_HOST:?SMTP_HOST obrigatorio}
