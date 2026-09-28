@@ -65,6 +65,7 @@ def test_public_lookup_route(tmp_path):
         home = client.get("/")
         assert 'href="/admin/login"' in home.text
         assert "Área administrativa" in home.text
+        assert "entre em contato com o RH" in home.text
 
 
 def test_workbook_is_the_employee_source_of_truth(tmp_path):

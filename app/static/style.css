@@ -50,6 +50,12 @@ button {
   background: #fbe8e8;
   color: #8e1d1d;
 }
+.alert.notice {
+  background: #eef4fb;
+  border-left: 4px solid #154c8c;
+  color: #294b73;
+  line-height: 1.45;
+}
 .employee-box {
   background: #f5f7fb;
   padding: 16px;
