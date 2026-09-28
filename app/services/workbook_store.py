@@ -192,3 +192,64 @@ def replace_employee_workbook(workbook_path, employees):
             _atomic_save(workbook, path)
         finally:
             workbook.close()
+
+
+def merge_emails_from_workbook(workbook_path, email_workbook_path):
+    """Fill blank employee e-mails from unique exact normalized-name matches."""
+    path = Path(workbook_path)
+    email_path = Path(email_workbook_path)
+    if not path.exists() or not email_path.exists():
+        raise FileNotFoundError("A planilha de colaboradores e a planilha de e-mails são obrigatórias.")
+
+    candidates = {}
+    source = load_workbook(email_path, read_only=True, data_only=True)
+    try:
+        sheet = source.active
+        rows = sheet.iter_rows(values_only=True)
+        header = {_key(value): index for index, value in enumerate(next(rows, ())) if value is not None}
+        name_column = header.get("nome")
+        email_column = header.get("email")
+        if name_column is None or email_column is None:
+            raise ValueError("A planilha auxiliar precisa ter as colunas Nome e Email.")
+        for row in rows:
+            if name_column >= len(row) or email_column >= len(row):
+                continue
+            name = _key(row[name_column])
+            email = str(row[email_column] or "").strip().lower()
+            if name and email:
+                candidates.setdefault(name, set()).add(email)
+    finally:
+        source.close()
+
+    unique_emails = {name: next(iter(emails)) for name, emails in candidates.items() if len(emails) == 1}
+    ambiguous_names = {name for name, emails in candidates.items() if len(emails) > 1}
+    updated = 0
+    unmatched = 0
+    with _WORKBOOK_LOCK:
+        workbook = load_workbook(path)
+        try:
+            sheet = workbook.active
+            headers = _headers(sheet)
+            name_column = headers.get("nome")
+            if name_column is None:
+                raise ValueError("A planilha oficial precisa ter a coluna Nome.")
+            email_column = headers.get("email")
+            if email_column is None:
+                email_column = sheet.max_column + 1
+                sheet.cell(1, email_column, "Email")
+            for row_number in range(2, sheet.max_row + 1):
+                if str(sheet.cell(row_number, email_column).value or "").strip():
+                    continue
+                name = _key(sheet.cell(row_number, name_column).value)
+                email = unique_emails.get(name)
+                if email:
+                    sheet.cell(row_number, email_column, _safe_excel_text(email))
+                    updated += 1
+                elif name:
+                    unmatched += 1
+            if updated:
+                _backup(path)
+                _atomic_save(workbook, path)
+        finally:
+            workbook.close()
+    return {"updated": updated, "unmatched": unmatched, "ambiguous": len(ambiguous_names)}

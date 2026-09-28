@@ -6,7 +6,7 @@ from app.services.employee_importer import build_employee_record, normalize_emai
 from app.services.signature_generator import generate_signature_image
 from app.services.admin_auth import authenticate_user
 from app.services.request_log import append_request_log, successful_request_emails
-from app.services.workbook_store import find_employee_by_email, list_employees, save_employee_to_workbook
+from app.services.workbook_store import find_employee_by_email, list_employees, merge_emails_from_workbook, save_employee_to_workbook
 
 
 def test_normalize_email():
@@ -252,3 +252,28 @@ def test_admin_dashboard_marks_generated_signature_and_has_sortable_headers(tmp_
         assert 'data-column="0"' in dashboard.text
         assert "Assinatura gerada" in dashboard.text
         assert 'class="signature-state generated">Sim' in dashboard.text
+
+
+def test_merge_emails_matches_normalized_names_without_overwriting(tmp_path):
+    from openpyxl import Workbook
+
+    employees_path = tmp_path / "colaboradores.xlsx"
+    employees = Workbook()
+    employees.active.append(["Nome", "Cargo", "Email"])
+    employees.active.append(["Ana Luíza de Carvalho", "Analista", ""])
+    employees.active.append(["E-mail Existente", "Gestor", "manter@empresa.com"])
+    employees.save(employees_path)
+
+    emails_path = tmp_path / "emails.xlsx"
+    emails = Workbook()
+    emails.active.append(["NOME", "Email"])
+    emails.active.append(["  ANA LUIZA DE CARVALHO ", "ana.luiza@empresa.com"])
+    emails.active.append(["E-MAIL EXISTENTE", "substituir@empresa.com"])
+    emails.save(emails_path)
+
+    result = merge_emails_from_workbook(employees_path, emails_path)
+
+    assert result["updated"] == 1
+    assert find_employee_by_email(employees_path, "ana.luiza@empresa.com")["full_name"] == "Ana Luíza de Carvalho"
+    assert find_employee_by_email(employees_path, "manter@empresa.com")["full_name"] == "E-mail Existente"
+    assert list(tmp_path.joinpath("backups").glob("*.xlsx"))
