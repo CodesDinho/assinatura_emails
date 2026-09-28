@@ -1,0 +1,112 @@
+import os
+import re
+import tempfile
+from pathlib import Path
+
+from PIL import Image, ImageDraw, ImageFont
+
+
+BASE_DIR = Path(__file__).resolve().parents[2]
+ART_DIR = BASE_DIR / "assets" / "signature"
+FONT_PATH = BASE_DIR / "assets" / "fonts" / "Poppins-Bold.ttf"
+
+SIGNATURE_SIZE = (532, 173)
+BRAND_BLUE = (27, 20, 100)
+ICON_BLUE = (46, 49, 146)
+SECONDARY_TEXT = (116, 115, 115)
+WHITE = (255, 255, 255)
+
+
+def _font(size: int):
+    """Load the exact Poppins Bold font embedded in the approved PowerPoint."""
+    return ImageFont.truetype(str(FONT_PATH), size)
+
+
+def _fit_font(draw, text, max_width, start_size, min_size):
+    for size in range(start_size, min_size - 1, -1):
+        font = _font(size)
+        box = draw.textbbox((0, 0), text, font=font)
+        if box[2] - box[0] <= max_width:
+            return font
+    return _font(min_size)
+
+
+def _asset(name):
+    return Image.open(ART_DIR / name).convert("RGBA")
+
+
+def _paste(image, asset_name, box, crop_transparent=False):
+    x, y, width, height = box
+    asset = _asset(asset_name).resize((width, height), Image.Resampling.LANCZOS)
+    if crop_transparent:
+        source = _asset(asset_name)
+        alpha_box = source.getchannel("A").getbbox()
+        if alpha_box:
+            asset = source.crop(alpha_box).resize((width, height), Image.Resampling.LANCZOS)
+    image.alpha_composite(asset, (x, y))
+
+
+def _draw_powerpoint_art(show_phone=False):
+    """Rebuild the static art from the editable objects in the approved PPTX."""
+    image = Image.new("RGBA", SIGNATURE_SIZE, WHITE + (255,))
+    draw = ImageDraw.Draw(image)
+
+    # Bottom flourish and patterned crescent.
+    draw.polygon(((145, 173), (193, 105), (215, 136), (241, 173)), fill=BRAND_BLUE + (255,))
+    draw.rectangle((-2, -3, 165, 176), fill=WHITE + (255,))
+    _paste(image, "image1.png", (2, 0, 221, 176), crop_transparent=True)
+
+    # Main left plate and official white logo extracted from the PPTX.
+    # The large circle in the source has no fill; the patterned crescent must remain visible.
+    draw.rounded_rectangle((-93, 10, 164, 169), radius=22, fill=BRAND_BLUE + (255,))
+    _paste(image, "image2.png", (14, 47, 94, 38))
+
+    # Contact icons from the current approved PowerPoint.
+    contact_icons = [(83, "image12.png"), (109, "image13.png")]
+    if show_phone:
+        contact_icons.append((137, "image15.png"))
+    for y, asset in contact_icons:
+        draw.rounded_rectangle((243, y, 261, y + 18), radius=2, fill=ICON_BLUE + (255,))
+        _paste(image, asset, (247, y + 4, 10, 10))
+    return image
+
+
+def generate_signature_image(name, role, email, output_path, phone=""):
+    """Render employee data over the approved signature artwork."""
+    if not FONT_PATH.exists():
+        raise FileNotFoundError(f"Fonte Poppins Bold não encontrada: {FONT_PATH}")
+
+    output = Path(output_path)
+    output.parent.mkdir(parents=True, exist_ok=True)
+
+    name = (name or "Nome do Colaborador").strip()
+    role = (role or "").strip()
+    email = (email or "colaborador@empresa.com").strip().lower()
+    phone = (phone or "").strip()
+
+    image = _draw_powerpoint_art(show_phone=bool(phone))
+    draw = ImageDraw.Draw(image)
+
+    name_font = _fit_font(draw, name, 280, 18, 13)
+    role_font = _fit_font(draw, role, 280, 12, 9)
+    email_font = _fit_font(draw, email, 260, 8, 6)
+    detail_font = _font(8)
+
+    # Positions, colors and relative sizes converted from the PPTX EMU coordinates.
+    draw.text((243, 25), name, font=name_font, fill=BRAND_BLUE)
+    if role:
+        draw.text((242, 48), role, font=role_font, fill=SECONDARY_TEXT)
+    draw.text((267, 87), email, font=email_font, fill=SECONDARY_TEXT)
+    draw.text((267, 113), "www.dinhodistribuidora.com.br", font=detail_font, fill=SECONDARY_TEXT)
+    if phone:
+        draw.text((267, 140), phone, font=detail_font, fill=SECONDARY_TEXT)
+
+    image.convert("RGB").save(output, format="PNG", optimize=True)
+    return output
+
+
+def generate_temp_signature(name, role, email, phone=""):
+    suffix = re.sub(r"[^a-zA-Z0-9]+", "_", (name or "assinatura").strip())
+    temp_dir = Path(tempfile.gettempdir())
+    output_path = temp_dir / f"assinatura_{suffix or 'colaborador'}_{os.getpid()}.png"
+    return generate_signature_image(name, role, email, output_path, phone=phone)

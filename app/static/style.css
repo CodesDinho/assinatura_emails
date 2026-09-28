@@ -1,0 +1,101 @@
+body {
+  font-family: Arial, sans-serif;
+  background: #f4f6f9;
+  margin: 0;
+  padding: 32px 16px;
+  color: #1d2736;
+}
+.container {
+  max-width: 720px;
+  margin: 0 auto;
+}
+.container:has(.wide-card) { max-width: 1180px; }
+.card {
+  background: #ffffff;
+  padding: 28px;
+  border-radius: 12px;
+  box-shadow: 0 8px 24px rgba(18, 39, 56, 0.08);
+}
+h1 {
+  margin-top: 0;
+  color: #1d4f91;
+}
+label {
+  display: block;
+  margin-bottom: 8px;
+  font-weight: bold;
+}
+input, button {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 12px 14px;
+  border-radius: 8px;
+  border: 1px solid #d0d7de;
+  margin-bottom: 14px;
+  font-size: 1rem;
+}
+button {
+  background: #154c8c;
+  color: #fff;
+  border: none;
+  cursor: pointer;
+  font-weight: bold;
+}
+.alert {
+  padding: 12px 14px;
+  border-radius: 8px;
+  margin-bottom: 16px;
+}
+.alert.error {
+  background: #fbe8e8;
+  color: #8e1d1d;
+}
+.employee-box {
+  background: #f5f7fb;
+  padding: 16px;
+  border-radius: 8px;
+  margin-bottom: 16px;
+}
+.flash-list {
+  padding-left: 20px;
+  color: #2f5d9f;
+}
+.success {
+  border-left: 6px solid #1c8c5c;
+}
+a {
+  color: #154c8c;
+  text-decoration: none;
+}
+.page-header, .actions { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+.actions { justify-content: flex-start; margin: 20px 0; }
+.button-link { display: inline-block; background: #154c8c; color: #fff; padding: 10px 14px; border-radius: 8px; font-weight: bold; }
+.button-link.secondary { background: #e8edf5; color: #154c8c; }
+.home-admin-access {
+  display: flex;
+  justify-content: flex-end;
+  margin: -10px -10px 12px 0;
+}
+.home-admin-access a {
+  padding: 6px 9px;
+  border: 1px solid #d0d7de;
+  border-radius: 6px;
+  background: #f5f7fb;
+  color: #53657a;
+  font-size: 0.78rem;
+  font-weight: bold;
+}
+.home-admin-access a:hover {
+  background: #e8edf5;
+  color: #154c8c;
+}
+.logout-form, .logout-form button { margin: 0; width: auto; }
+.table-wrapper { overflow-x: auto; }
+table { width: 100%; border-collapse: collapse; }
+th, td { padding: 10px; border-bottom: 1px solid #e3e7ed; text-align: left; vertical-align: top; }
+.checkbox-label { display: flex; align-items: center; gap: 8px; margin-bottom: 16px; }
+.checkbox-label input { width: auto; margin: 0; }
+@media (max-width: 640px) {
+  .page-header { align-items: flex-start; }
+  .actions { flex-direction: column; align-items: stretch; }
+}

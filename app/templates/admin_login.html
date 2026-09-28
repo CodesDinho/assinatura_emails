@@ -1,0 +1,16 @@
+{% extends 'base.html' %}
+{% block title %}Administração{% endblock %}
+{% block content %}
+<section class="card">
+  <h1>Login administrativo</h1>
+  <form method="post">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <label for="username">Usuário</label>
+    <input id="username" name="username" required>
+    <label for="password">Senha</label>
+    <input id="password" name="password" type="password" required>
+    <button type="submit">Entrar</button>
+  </form>
+  <p><a href="{{ url_for('home') }}">Voltar à geração de assinatura</a></p>
+</section>
+{% endblock %}

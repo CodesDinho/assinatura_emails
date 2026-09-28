@@ -1,0 +1,23 @@
+{% extends 'base.html' %}
+{% block title %}{{ 'Novo colaborador' if is_new else 'Editar colaborador' }}{% endblock %}
+{% block content %}
+<section class="card">
+  <h1>{{ 'Novo colaborador' if is_new else 'Editar colaborador' }}</h1>
+  <p>As alterações serão salvas também na planilha oficial.</p>
+  {% if issues %}<div class="alert error">{% for field, message in issues.items() %}<div>{{ message }}</div>{% endfor %}</div>{% endif %}
+  <form method="post">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <label for="full_name">Nome</label>
+    <input id="full_name" name="full_name" required value="{{ employee['full_name'] }}">
+    <label for="job_title">Cargo</label>
+    <input id="job_title" name="job_title" required value="{{ employee['job_title'] }}">
+    <label for="email">E-mail</label>
+    <input id="email" name="email" type="email" required value="{{ employee['email'] }}">
+    <label for="phone">Número de celular</label>
+    <input id="phone" name="phone" type="tel" value="{{ employee['phone'] or '' }}" placeholder="+55 41 99999-9999">
+    <label class="checkbox-label"><input name="active" type="checkbox" value="1" {% if employee['active'] %}checked{% endif %}> Cadastro ativo</label>
+    <button type="submit">Salvar</button>
+  </form>
+  <p><a href="{{ url_for('admin_dashboard') }}">Cancelar e voltar</a></p>
+</section>
+{% endblock %}

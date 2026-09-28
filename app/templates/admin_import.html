@@ -1,0 +1,31 @@
+{% extends 'base.html' %}
+{% block title %}Importação{% endblock %}
+{% block content %}
+<section class="card">
+  <h1>Importação de base</h1>
+  <form method="post" enctype="multipart/form-data">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <label for="file">Arquivo CSV/XLSX</label>
+    <input id="file" name="file" type="file" accept=".csv,.xlsx,.xlsm" required>
+    <button type="submit">Importar</button>
+  </form>
+
+  {% if preview %}
+    <h2>Prévia</h2>
+    <ul>
+      {% for item in preview %}
+        <li>{{ item['full_name'] }} — {{ item['email'] }}</li>
+      {% endfor %}
+    </ul>
+  {% endif %}
+
+  {% if errors %}
+    <h2>Erros</h2>
+    <ul>
+      {% for error in errors %}
+        <li>{{ error['row'] }} — {{ error['issues'] }}</li>
+      {% endfor %}
+    </ul>
+  {% endif %}
+</section>
+{% endblock %}

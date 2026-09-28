@@ -1,0 +1,21 @@
+{% extends 'base.html' %}
+{% block title %}Geração de assinatura de e-mail Dinho{% endblock %}
+{% block content %}
+<section class="card">
+  <div class="home-admin-access">
+    <a href="{{ url_for('admin_login') }}">Área administrativa</a>
+  </div>
+  <h1>Geração de assinatura de e-mail Dinho</h1>
+  <p>Informe seu e-mail corporativo para localizar o cadastro ativo.</p>
+
+  {% if error %}
+    <div class="alert error">{{ error }}</div>
+  {% endif %}
+
+  <form method="post" action="{{ url_for('consultar_email') }}">
+    <label for="email">E-mail corporativo</label>
+    <input id="email" name="email" type="email" required placeholder="nome@dinhodistribuidora.com.br">
+    <button type="submit">Consultar</button>
+  </form>
+</section>
+{% endblock %}

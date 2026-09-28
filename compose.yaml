@@ -1,0 +1,45 @@
+services:
+  assinatura-emails:
+    image: ${ASSINATURA_EMAILS_IMAGE:-ghcr.io/codesdinho/assinatura-emails:latest}
+    container_name: assinatura-emails
+    restart: unless-stopped
+    environment:
+      SECRET_KEY: ${SECRET_KEY:?SECRET_KEY obrigatoria}
+      APP_BASE_URL: ${APP_BASE_URL:-http://10.1.1.153:8505}
+      DATABASE_PATH: /app/instance/employees.sqlite3
+      EMPLOYEE_WORKBOOK_PATH: /app/data/colaboradores_ativos_2409.xlsx
+      ADMIN_USERS_PATH: /app/config/users.json
+      SESSION_COOKIE_SECURE: ${SESSION_COOKIE_SECURE:-false}
+      SMTP_HOST: ${SMTP_HOST:?SMTP_HOST obrigatorio}
+      SMTP_PORT: ${SMTP_PORT:-465}
+      SMTP_USERNAME: ${SMTP_USERNAME:-${SGQ_SMTP_USER:?SMTP_USERNAME obrigatorio}}
+      SMTP_PASSWORD: ${SMTP_PASSWORD:-${SGQ_SMTP_PASSWORD:?SMTP_PASSWORD obrigatorio}}
+      SMTP_FROM: ${SMTP_FROM:-${SGQ_FROM_EMAIL:?SMTP_FROM obrigatorio}}
+      SMTP_USE_TLS: ${SMTP_USE_TLS:-false}
+      SMTP_SSL: ${SMTP_SSL:-true}
+    ports:
+      - "${ASSINATURA_EMAILS_PORT:-8505}:5000"
+    volumes:
+      - assinatura-emails-data:/app/data
+      - assinatura-emails-instance:/app/instance
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:5000/health', timeout=3)"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+    security_opt:
+      - no-new-privileges:true
+    mem_limit: 384m
+    cpus: 0.50
+    logging:
+      driver: json-file
+      options:
+        max-size: 10m
+        max-file: "5"
+
+volumes:
+  assinatura-emails-data:
+    external: true
+  assinatura-emails-instance:
+    external: true

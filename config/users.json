@@ -1,0 +1,22 @@
+{
+  "usuarios": [
+    {
+      "username": "suporte.dinho",
+      "nome": "Suporte Dinho",
+      "perfil": "Administrador",
+      "ativo": true,
+      "salt": "9b40f9583ea50e317e0f6c3d86664b3180923ea98ebf638d3946284e4a95c0c7",
+      "senha_hash": "a446999b88142d4a08118b0d4b818db6b3b22c125894e47af24c1334d2799358",
+      "iteracoes": 600000
+    },
+    {
+      "username": "rh",
+      "nome": "Recursos Humanos",
+      "perfil": "Administrador",
+      "ativo": true,
+      "salt": "31441fa21cd1a104ba338ae4009db921ff996f8c883e7fe8dd875f1903df2f69",
+      "senha_hash": "e5cbaeac9860c94299aa526d06532a16973b4c6ee0da559b94022c251f2649f2",
+      "iteracoes": 600000
+    }
+  ]
+}

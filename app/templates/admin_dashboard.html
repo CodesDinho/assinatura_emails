@@ -1,0 +1,41 @@
+{% extends 'base.html' %}
+{% block title %}Gestão de colaboradores{% endblock %}
+{% block content %}
+<section class="card wide-card">
+  <div class="page-header">
+    <div>
+      <h1>Gestão de colaboradores</h1>
+      <p>Olá, {{ session['admin_user']['name'] }}. Total: {{ total }} | Ativos: {{ active }} | Inativos: {{ inactive }}</p>
+    </div>
+    <form class="logout-form" method="post" action="{{ url_for('admin_logout') }}">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <button class="button-link secondary" type="submit">Sair</button>
+    </form>
+  </div>
+  <div class="actions">
+    <a class="button-link" href="{{ url_for('admin_employee_new') }}">Novo colaborador</a>
+    <a class="button-link secondary" href="{{ url_for('admin_import') }}">Importar base</a>
+  </div>
+
+  <h2>Colaboradores</h2>
+  <div class="table-wrapper"><table>
+    <thead><tr><th>Nome</th><th>Cargo</th><th>E-mail</th><th>Celular</th><th>Status</th><th></th></tr></thead>
+    <tbody>
+    {% for employee in employees %}
+      <tr><td>{{ employee['full_name'] }}</td><td>{{ employee['job_title'] }}</td><td>{{ employee['email'] }}</td><td>{{ employee['phone'] or '—' }}</td><td>{{ 'Ativo' if employee['active'] else 'Inativo' }}</td><td><a href="{{ url_for('admin_employee_edit', employee_id=employee['id']) }}">Editar</a></td></tr>
+    {% else %}
+      <tr><td colspan="6">Nenhum colaborador cadastrado.</td></tr>
+    {% endfor %}
+    </tbody>
+  </table></div>
+
+  <h2>Solicitações recentes</h2>
+  <ul>
+    {% for log in request_rows %}
+      <li>{{ log['created_at'] }} — {{ log['status'] }} — {{ log['normalized_email'] }}</li>
+    {% else %}
+      <li>Nenhuma solicitação registrada.</li>
+    {% endfor %}
+  </ul>
+</section>
+{% endblock %}
