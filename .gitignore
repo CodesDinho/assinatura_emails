@@ -14,6 +14,7 @@ data/*.xlsx
 data/*.xlsm
 data/*.pptx
 data/~$*
+data/backups/
 generated/
 debug_*.py
 inspect_*.py
