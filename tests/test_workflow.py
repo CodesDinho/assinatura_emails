@@ -5,6 +5,7 @@ from app.services.email_sender import resolve_smtp_settings
 from app.services.employee_importer import build_employee_record, normalize_email, validate_employee_row
 from app.services.signature_generator import generate_signature_image
 from app.services.admin_auth import authenticate_user
+from app.services.request_log import append_request_log, successful_request_emails
 from app.services.workbook_store import find_employee_by_email, list_employees, save_employee_to_workbook
 
 
@@ -184,3 +185,70 @@ def test_admin_area_requires_login_and_saves_new_employee_to_excel(tmp_path):
     assert saved.cell(2, headers.index("Celular") + 1).value == "+55 41 98888-7777"
     assert len(list(tmp_path.joinpath("backups").glob("*.xlsx"))) >= 1
     assert not list(tmp_path.glob("*.sqlite*"))
+
+
+def test_employee_can_update_phone_before_generating_signature(tmp_path, monkeypatch):
+    from openpyxl import Workbook, load_workbook
+
+    workbook_path = tmp_path / "colaboradores.xlsx"
+    workbook = Workbook()
+    workbook.active.append(["Nome", "Cargo", "Email", "Celular", "Ativo"])
+    workbook.active.append(["Maria Teste", "Analista", "maria@empresa.com", "1111", "SIM"])
+    workbook.save(workbook_path)
+    log_path = tmp_path / "requests.jsonl"
+    app = create_app(test_config={
+        "TESTING": True,
+        "SECRET_KEY": "test-secret",
+        "EMPLOYEE_WORKBOOK_PATH": str(workbook_path),
+        "REQUEST_LOG_PATH": str(log_path),
+        "GENERATED_FILES_PATH": str(tmp_path / "generated"),
+    })
+    monkeypatch.setattr("app.routes.send_signature_email", lambda *args, **kwargs: {"status": "simulated"})
+
+    with app.test_client() as client:
+        confirmation = client.post("/consultar", data={"email": "maria@empresa.com"})
+        assert confirmation.status_code == 200
+        assert 'name="phone"' in confirmation.text
+        assert 'value="1111"' in confirmation.text
+        token = confirmation.text.split('name="csrf_token" value="', 1)[1].split('"', 1)[0]
+        sent = client.post("/solicitar", data={
+            "csrf_token": token,
+            "email": "maria@empresa.com",
+            "phone": "+55 41 99999-0000",
+        })
+        assert sent.status_code == 200
+        assert "maria@empresa.com" in successful_request_emails(log_path)
+
+    saved = load_workbook(workbook_path, data_only=True).active
+    assert saved.cell(2, 4).value == "+55 41 99999-0000"
+    assert list(tmp_path.joinpath("backups").glob("*.xlsx"))
+
+
+def test_admin_dashboard_marks_generated_signature_and_has_sortable_headers(tmp_path):
+    from openpyxl import Workbook
+
+    workbook_path = tmp_path / "colaboradores.xlsx"
+    workbook = Workbook()
+    workbook.active.append(["Nome", "Cargo", "Email", "Celular", "Ativo"])
+    workbook.active.append(["Maria Teste", "Analista", "maria@empresa.com", "", "SIM"])
+    workbook.save(workbook_path)
+    log_path = tmp_path / "requests.jsonl"
+    append_request_log(log_path, "maria@empresa.com", "sent", "assinatura enviada")
+    users_path = Path(__file__).resolve().parent.parent / "config" / "users.json"
+    app = create_app(test_config={
+        "TESTING": True,
+        "SECRET_KEY": "test-secret",
+        "EMPLOYEE_WORKBOOK_PATH": str(workbook_path),
+        "ADMIN_USERS_PATH": str(users_path),
+        "REQUEST_LOG_PATH": str(log_path),
+    })
+
+    with app.test_client() as client:
+        login_page = client.get("/admin/login")
+        token = login_page.text.split('name="csrf_token" value="', 1)[1].split('"', 1)[0]
+        client.post("/admin/login", data={"username": "rh", "password": "rh", "csrf_token": token})
+        dashboard = client.get("/admin")
+        assert dashboard.status_code == 200
+        assert 'data-column="0"' in dashboard.text
+        assert "Assinatura gerada" in dashboard.text
+        assert 'class="signature-state generated">Sim' in dashboard.text

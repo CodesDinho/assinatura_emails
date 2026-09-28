@@ -9,7 +9,7 @@ from werkzeug.security import check_password_hash
 from app.services.admin_auth import authenticate_user
 from app.services.email_sender import send_signature_email
 from app.services.employee_importer import build_employee_record, normalize_email, read_employee_rows, validate_employee_row
-from app.services.request_log import append_request_log, recent_request_logs
+from app.services.request_log import append_request_log, recent_request_logs, successful_request_emails
 from app.services.signature_generator import generate_signature_image
 from app.services.workbook_store import (
     find_employee_by_email,
@@ -98,6 +98,8 @@ def register_routes(app):
 
     @app.route("/solicitar", methods=["POST"])
     def solicitar_assinatura():
+        if not _valid_csrf():
+            return render_template("home.html", error="A sessão expirou. Consulte seu e-mail novamente."), 400
         email = normalize_email(request.form.get("email"))
         if not email:
             return render_template("home.html", error="E-mail obrigatório.")
@@ -105,6 +107,16 @@ def register_routes(app):
         if not employee:
             _log_request(email, "not_found_sent", "Tentativa de solicitação sem cadastro")
             return render_template("home.html", error="Não foi possível localizar seu cadastro ativo.")
+
+        phone = " ".join(request.form.get("phone", "").strip().split())
+        if len(phone) > 30:
+            employee["phone"] = phone
+            return render_template("confirm.html", employee=employee, phone_error="Informe um celular com até 30 caracteres."), 400
+        if phone != employee.get("phone", ""):
+            updated_employee = dict(employee)
+            updated_employee["phone"] = phone
+            save_employee_to_workbook(current_app.config["EMPLOYEE_WORKBOOK_PATH"], updated_employee, original=employee)
+            employee = updated_employee
 
         signature_path = None
         try:
@@ -158,6 +170,9 @@ def register_routes(app):
     @_admin_login_required
     def admin_dashboard():
         rows = sorted(list_employees(current_app.config["EMPLOYEE_WORKBOOK_PATH"]), key=lambda item: item["full_name"].casefold())
+        generated_emails = successful_request_emails(current_app.config["REQUEST_LOG_PATH"])
+        for employee in rows:
+            employee["signature_generated"] = employee["email"] in generated_emails
         total = len(rows)
         active = sum(1 for employee in rows if employee["active"])
         logs = recent_request_logs(current_app.config["REQUEST_LOG_PATH"])

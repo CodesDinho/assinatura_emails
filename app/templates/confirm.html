@@ -12,7 +12,12 @@
   </div>
 
   <form method="post" action="{{ url_for('solicitar_assinatura') }}">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
     <input type="hidden" name="email" value="{{ employee['email'] }}">
+    <label for="phone">Número de celular</label>
+    <input id="phone" name="phone" type="tel" maxlength="30" value="{{ employee['phone'] or '' }}" placeholder="+55 41 99999-9999" aria-describedby="phone-help{% if phone_error %} phone-error{% endif %}">
+    <small id="phone-help" class="field-help">Confira ou corrija o número. A alteração será salva na planilha oficial.</small>
+    {% if phone_error %}<p id="phone-error" class="field-error">{{ phone_error }}</p>{% endif %}
     <button type="submit">Enviar minha assinatura</button>
   </form>
 </section>

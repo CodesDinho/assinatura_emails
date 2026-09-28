@@ -34,3 +34,20 @@ def recent_request_logs(log_path, limit=15):
             except (ValueError, TypeError):
                 continue
     return list(reversed(records[-limit:]))
+
+
+def successful_request_emails(log_path):
+    """Return normalized e-mails that completed signature generation/sending."""
+    path = Path(log_path)
+    if not path.exists():
+        return set()
+    emails = set()
+    with _LOG_LOCK, path.open("r", encoding="utf-8") as stream:
+        for line in stream:
+            try:
+                record = json.loads(line)
+            except (ValueError, TypeError):
+                continue
+            if record.get("status") == "sent" and record.get("normalized_email"):
+                emails.add(str(record["normalized_email"]).strip().lower())
+    return emails

@@ -18,13 +18,26 @@
   </div>
 
   <h2>Colaboradores</h2>
-  <div class="table-wrapper"><table>
-    <thead><tr><th>Nome</th><th>Cargo</th><th>E-mail</th><th>Celular</th><th>Status</th><th></th></tr></thead>
+  <div class="table-wrapper"><table id="employees-table">
+    <thead><tr>
+      <th><button class="sort-button" type="button" data-column="0">Nome <span aria-hidden="true">↕</span></button></th>
+      <th><button class="sort-button" type="button" data-column="1">Cargo <span aria-hidden="true">↕</span></button></th>
+      <th><button class="sort-button" type="button" data-column="2">E-mail <span aria-hidden="true">↕</span></button></th>
+      <th><button class="sort-button" type="button" data-column="3">Celular <span aria-hidden="true">↕</span></button></th>
+      <th><button class="sort-button" type="button" data-column="4">Status <span aria-hidden="true">↕</span></button></th>
+      <th><button class="sort-button" type="button" data-column="5">Assinatura gerada <span aria-hidden="true">↕</span></button></th>
+      <th>Ações</th>
+    </tr></thead>
     <tbody>
     {% for employee in employees %}
-      <tr><td>{{ employee['full_name'] }}</td><td>{{ employee['job_title'] }}</td><td>{{ employee['email'] }}</td><td>{{ employee['phone'] or '—' }}</td><td>{{ 'Ativo' if employee['active'] else 'Inativo' }}</td><td><a href="{{ url_for('admin_employee_edit', employee_id=employee['id']) }}">Editar</a></td></tr>
+      <tr>
+        <td>{{ employee['full_name'] }}</td><td>{{ employee['job_title'] }}</td><td>{{ employee['email'] }}</td><td>{{ employee['phone'] or '—' }}</td>
+        <td>{{ 'Ativo' if employee['active'] else 'Inativo' }}</td>
+        <td data-sort-value="{{ 1 if employee['signature_generated'] else 0 }}"><span class="signature-state {{ 'generated' if employee['signature_generated'] else 'pending' }}">{{ 'Sim' if employee['signature_generated'] else 'Não' }}</span></td>
+        <td><a href="{{ url_for('admin_employee_edit', employee_id=employee['id']) }}">Editar</a></td>
+      </tr>
     {% else %}
-      <tr><td colspan="6">Nenhum colaborador cadastrado.</td></tr>
+      <tr><td colspan="7">Nenhum colaborador cadastrado.</td></tr>
     {% endfor %}
     </tbody>
   </table></div>
@@ -38,4 +51,31 @@
     {% endfor %}
   </ul>
 </section>
+<script>
+(() => {
+  const table = document.getElementById('employees-table');
+  if (!table) return;
+  const body = table.tBodies[0];
+  let activeColumn = -1;
+  let ascending = true;
+  table.querySelectorAll('.sort-button').forEach((button) => {
+    button.addEventListener('click', () => {
+      const column = Number(button.dataset.column);
+      ascending = activeColumn === column ? !ascending : true;
+      activeColumn = column;
+      const rows = Array.from(body.rows).filter((row) => row.cells.length > 1);
+      rows.sort((left, right) => {
+        const leftCell = left.cells[column];
+        const rightCell = right.cells[column];
+        const leftValue = (leftCell.dataset.sortValue ?? leftCell.textContent).trim();
+        const rightValue = (rightCell.dataset.sortValue ?? rightCell.textContent).trim();
+        return leftValue.localeCompare(rightValue, 'pt-BR', {numeric: true, sensitivity: 'base'}) * (ascending ? 1 : -1);
+      });
+      rows.forEach((row) => body.appendChild(row));
+      table.querySelectorAll('.sort-button').forEach((item) => item.removeAttribute('aria-sort'));
+      button.setAttribute('aria-sort', ascending ? 'ascending' : 'descending');
+    });
+  });
+})();
+</script>
 {% endblock %}
