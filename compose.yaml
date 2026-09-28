@@ -13,9 +13,9 @@ services:
       SESSION_COOKIE_SECURE: ${SESSION_COOKIE_SECURE:-false}
       SMTP_HOST: ${SMTP_HOST:?SMTP_HOST obrigatorio}
       SMTP_PORT: ${SMTP_PORT:-465}
-      SMTP_USERNAME: ${SMTP_USERNAME:-${SGQ_SMTP_USER:?SMTP_USERNAME obrigatorio}}
-      SMTP_PASSWORD: ${SMTP_PASSWORD:-${SGQ_SMTP_PASSWORD:?SMTP_PASSWORD obrigatorio}}
-      SMTP_FROM: ${SMTP_FROM:-${SGQ_FROM_EMAIL:?SMTP_FROM obrigatorio}}
+      SMTP_USERNAME: ${SMTP_USERNAME:?SMTP_USERNAME obrigatorio}
+      SMTP_PASSWORD: ${SMTP_PASSWORD:?SMTP_PASSWORD obrigatorio}
+      SMTP_FROM: ${SMTP_FROM:?SMTP_FROM obrigatorio}
       SMTP_USE_TLS: ${SMTP_USE_TLS:-false}
       SMTP_SSL: ${SMTP_SSL:-true}
     ports:
