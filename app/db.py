@@ -52,6 +52,12 @@ def initialize_database(database_path: str):
 
 
 def seed_local_employee_data(database_path: str, data_dir: str | None = None) -> int:
+    """Synchronize spreadsheet employees without deleting persisted records.
+
+    The database lives in a Docker volume and may contain administrative changes.
+    Startup synchronization therefore uses upserts; a missing, partial, or stale
+    spreadsheet must never empty the employees table.
+    """
     initialize_database(database_path)
     source_dir = Path(data_dir) if data_dir else Path(__file__).resolve().parent.parent / "data"
     if not source_dir.exists():
@@ -117,9 +123,11 @@ def seed_local_employee_data(database_path: str, data_dir: str | None = None) ->
                 active_value = str(mapped.get("Ativo") or mapped.get("ativo") or "SIM").strip().upper()
                 record["active"] = active_value not in {"NÃO", "NAO", "NO", "N", "0", "FALSE", "INATIVO"}
 
+    if not merged:
+        return 0
+
     connection = get_connection(database_path)
     try:
-        connection.execute("DELETE FROM employees")
         imported = 0
         imported_emails = set()
         for record in merged.values():
@@ -129,7 +137,17 @@ def seed_local_employee_data(database_path: str, data_dir: str | None = None) ->
                 continue
 
             connection.execute(
-                "INSERT INTO employees (full_name, job_title, email, active, phone, created_at, updated_at) VALUES (?, ?, ?, ?, ?, datetime('now'), datetime('now'))",
+                """
+                INSERT INTO employees
+                    (full_name, job_title, email, active, phone, created_at, updated_at)
+                VALUES (?, ?, ?, ?, ?, datetime('now'), datetime('now'))
+                ON CONFLICT(email) DO UPDATE SET
+                    full_name=excluded.full_name,
+                    job_title=excluded.job_title,
+                    active=excluded.active,
+                    phone=excluded.phone,
+                    updated_at=datetime('now')
+                """,
                 (record["full_name"], job_title, email, 1 if record.get("active", True) else 0, record["phone"]),
             )
             imported_emails.add(email)

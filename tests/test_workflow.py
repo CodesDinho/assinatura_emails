@@ -87,6 +87,35 @@ def test_seed_local_employee_data(tmp_path):
     assert row["job_title"] not in ("", "Colaborador")
 
 
+def test_seed_does_not_delete_persisted_employees(tmp_path):
+    import sqlite3
+    from openpyxl import Workbook
+
+    data_dir = tmp_path / "data"
+    data_dir.mkdir()
+    workbook = Workbook()
+    workbook.active.append(["Nome", "Cargo", "Email", "Ativo"])
+    workbook.active.append(["Pessoa da Planilha", "Analista", "planilha@empresa.com", "SIM"])
+    workbook.save(data_dir / "colaboradores.xlsx")
+
+    database_path = tmp_path / "employees.sqlite3"
+    seed_local_employee_data(str(database_path), str(data_dir))
+    connection = sqlite3.connect(database_path)
+    connection.execute(
+        "INSERT INTO employees (full_name, job_title, email, active) VALUES (?, ?, ?, ?)",
+        ("Cadastro Administrativo", "Gestor", "admin@empresa.com", 1),
+    )
+    connection.commit()
+    connection.close()
+
+    seed_local_employee_data(str(database_path), str(data_dir))
+
+    connection = sqlite3.connect(database_path)
+    emails = {row[0] for row in connection.execute("SELECT email FROM employees")}
+    connection.close()
+    assert emails == {"planilha@empresa.com", "admin@empresa.com"}
+
+
 def test_resolve_smtp_settings_supports_sgq_env_names(monkeypatch):
     monkeypatch.delenv("SMTP_HOST", raising=False)
     monkeypatch.delenv("SMTP_PORT", raising=False)

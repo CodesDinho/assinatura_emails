@@ -51,7 +51,8 @@ def create_app(test_config=None):
     if app.config.get("SEED_LOCAL_DATA", True):
         if Path(app.config["EMPLOYEE_WORKBOOK_PATH"]).exists():
             ensure_employee_columns(app.config["EMPLOYEE_WORKBOOK_PATH"])
-        seed_local_employee_data(app.config["DATABASE_PATH"], str(BASE_DIR / "data"))
+        workbook_dir = Path(app.config["EMPLOYEE_WORKBOOK_PATH"]).parent
+        seed_local_employee_data(app.config["DATABASE_PATH"], str(workbook_dir))
     register_routes(app)
 
     @app.route("/health")
