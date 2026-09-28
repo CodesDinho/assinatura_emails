@@ -62,7 +62,20 @@ def test_public_lookup_route(tmp_path):
 
 
 def test_seed_local_employee_data(tmp_path):
-    data_dir = Path(__file__).resolve().parent.parent / "data"
+    from openpyxl import Workbook
+
+    data_dir = tmp_path / "data"
+    data_dir.mkdir()
+    workbook = Workbook()
+    workbook.active.append(["Nome", "Cargo", "Email", "Celular", "Ativo"])
+    workbook.active.append([
+        "Adriano Jarochevski",
+        "Analista",
+        "adriano.jarochevski@dinhodistribuidora.com.br",
+        "+55 41 99999-0000",
+        "SIM",
+    ])
+    workbook.save(data_dir / "colaboradores.xlsx")
     database_path = tmp_path / "seed.sqlite3"
     rows = seed_local_employee_data(str(database_path), str(data_dir))
     assert rows > 0

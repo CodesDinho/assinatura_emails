@@ -49,7 +49,8 @@ def create_app(test_config=None):
 
     initialize_database(app.config["DATABASE_PATH"])
     if app.config.get("SEED_LOCAL_DATA", True):
-        ensure_employee_columns(app.config["EMPLOYEE_WORKBOOK_PATH"])
+        if Path(app.config["EMPLOYEE_WORKBOOK_PATH"]).exists():
+            ensure_employee_columns(app.config["EMPLOYEE_WORKBOOK_PATH"])
         seed_local_employee_data(app.config["DATABASE_PATH"], str(BASE_DIR / "data"))
     register_routes(app)
 
