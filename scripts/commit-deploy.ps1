@@ -72,7 +72,7 @@ function Wait-GitHubActions {
                 if ($run.conclusion -ne 'success') {
                     throw "Pipeline terminou com status '$($run.conclusion)': $($run.html_url)"
                 }
-                Write-Host "Pipeline concluído: $($run.html_url)"
+                Write-Host "Pipeline concluido: $($run.html_url)"
                 return
             }
         } catch {
@@ -100,7 +100,7 @@ function Wait-HealthCheck {
         }
         Start-Sleep -Seconds 5
     } while ((Get-Date) -lt $deadline)
-    throw "O serviço não ficou saudável em $TimeoutSeconds segundos: $Uri"
+    throw "O servico nao ficou saudavel em $TimeoutSeconds segundos: $Uri"
 }
 
 $configPath = (Resolve-Path -LiteralPath $Config).Path
@@ -126,7 +126,7 @@ try {
     if (-not $SkipCommit) {
         Invoke-Native git @('add', '--all')
         $staged = & git diff --cached --name-only
-        if ($LASTEXITCODE -ne 0) { throw 'Não foi possível inspecionar os arquivos preparados.' }
+        if ($LASTEXITCODE -ne 0) { throw 'Nao foi possivel inspecionar os arquivos preparados.' }
         $blocked = @($staged | Where-Object { $_ -match '(^|/)(\.env($|\.)|.*\.(pfx|p12|pem|key)$)' })
         if ($blocked.Count -gt 0) {
             & git reset -- @blocked
