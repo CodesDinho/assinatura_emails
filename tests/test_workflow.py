@@ -84,6 +84,8 @@ def test_public_lookup_route(tmp_path):
         assert 'href="/admin/login"' in home.text
         assert "Área administrativa" in home.text
         assert "entre em contato com o RH" in home.text
+        assert "Opções &gt; Email &gt; Assinaturas" in home.text
+        assert "respostas e encaminhamentos" in home.text
 
 
 def test_workbook_is_the_employee_source_of_truth(tmp_path):

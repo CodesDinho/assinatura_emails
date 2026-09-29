@@ -16,6 +16,11 @@
     Caso apresente o erro “Nenhum cadastro ativo foi encontrado para esse e-mail” ou seja necessária a edição de cargo, entre em contato com o RH.
   </div>
 
+  <div class="alert notice">
+    <p>Para configurar a assinatura no Outlook, acesse o menu <strong>Opções &gt; Email &gt; Assinaturas</strong>.</p>
+    <p>Crie uma assinatura em <strong>Novo</strong> e confirme em <strong>OK</strong>. Edite a assinatura criada, insira a imagem baixada e selecione-a para uso tanto em novas mensagens quanto em respostas e encaminhamentos.</p>
+  </div>
+
   <form method="post" action="{{ url_for('consultar_email') }}">
     <label for="email">E-mail corporativo</label>
     <input id="email" name="email" type="email" required placeholder="nome@dinhodistribuidora.com.br">
