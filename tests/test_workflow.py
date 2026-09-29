@@ -23,6 +23,9 @@ def test_normalize_email():
 def test_formats_uppercase_employee_name_and_job_title():
     assert format_person_name("ROBERSON AUGUSTO DE SOUZA") == "Roberson Augusto de Souza"
     assert format_job_title("COORDENADOR DE T.I.") == "Coordenador de T.I"
+    assert format_job_title("COORDENADOR DE T.I") == "Coordenador de T.I"
+    assert format_job_title("COORDENADOR DE TI.") == "Coordenador de TI"
+    assert format_job_title("COORDENADOR DE TI") == "Coordenador de TI"
     assert format_job_title("ANALISTA DE RH") == "Analista de RH"
 
 
