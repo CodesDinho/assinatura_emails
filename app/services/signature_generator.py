@@ -88,7 +88,7 @@ def generate_signature_image(name, role, email, output_path, phone=""):
     draw.text((246, 31), name, font=name_font, fill=BRAND_BLUE)
     if role:
         draw.text((245, 52), role, font=role_font, fill=SECONDARY_TEXT)
-    draw.line((245, 63, 515, 63), fill=ICON_BLUE, width=2)
+    draw.line((245, 68, 515, 68), fill=ICON_BLUE, width=2)
     draw.text((273, 91), email, font=email_font, fill=SECONDARY_TEXT)
     draw.text((270, 117), "www.dinhodistribuidora.com.br", font=detail_font, fill=SECONDARY_TEXT)
     if phone:

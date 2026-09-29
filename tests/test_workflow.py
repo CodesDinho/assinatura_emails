@@ -65,7 +65,7 @@ def test_generate_signature_image_creates_png(tmp_path):
         # The approved PPT no longer contains the social-media icon strip.
         assert generated.crop((400, 145, 500, 173)).getcolors(maxcolors=1) == [(2800, (255, 255, 255))]
         # Its separator extends through the right side of the signature.
-        assert generated.getpixel((500, 63)) == ICON_BLUE
+        assert generated.getpixel((500, 68)) == ICON_BLUE
 
 
 def test_public_lookup_route(tmp_path):
