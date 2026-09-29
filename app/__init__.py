@@ -58,3 +58,7 @@ def create_app(test_config=None):
         return jsonify({"status": "ok" if available else "error", "workbook": str(workbook), "workbook_available": available}), 200 if available else 503
 
     return app
+
+
+##após fazer uma alteração, se quiser comitar e fazer deply use:
+##.\scripts\commit-deploy.ps1 -Message "Msg commit"

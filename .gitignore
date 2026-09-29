@@ -13,6 +13,7 @@ assets/*.jpg
 data/*.xlsx
 data/*.xlsm
 data/*.pptx
+data/*.zip
 data/~$*
 data/backups/
 generated/
