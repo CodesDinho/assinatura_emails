@@ -3,7 +3,7 @@ from pathlib import Path
 from app import create_app
 from app.services.email_sender import resolve_smtp_settings
 from app.services.employee_importer import build_employee_record, normalize_email, validate_employee_row
-from app.services.signature_generator import generate_signature_image
+from app.services.signature_generator import ICON_BLUE, generate_signature_image
 from app.services.admin_auth import authenticate_user
 from app.services.request_log import append_request_log, successful_request_emails
 from app.services.workbook_store import (
@@ -62,8 +62,10 @@ def test_generate_signature_image_creates_png(tmp_path):
 
     with Image.open(result) as generated:
         assert generated.size == (532, 173)
-        # The new approved PPT restores the social-media icon strip.
-        assert generated.crop((400, 145, 500, 173)).getcolors(maxcolors=1) is None
+        # The approved PPT no longer contains the social-media icon strip.
+        assert generated.crop((400, 145, 500, 173)).getcolors(maxcolors=1) == [(2800, (255, 255, 255))]
+        # Its separator extends through the right side of the signature.
+        assert generated.getpixel((500, 63)) == ICON_BLUE
 
 
 def test_public_lookup_route(tmp_path):

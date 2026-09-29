@@ -60,12 +60,6 @@ def _draw_powerpoint_art(show_phone=False):
         draw.rounded_rectangle((243, y, 261, y + 18), radius=2, fill=ICON_BLUE + (255,))
         _paste(image, asset, (247, y + 4, 10, 10))
 
-    # Social-media strip restored in the new approved layout.
-    _paste(image, "image10.png", (409, 150, 17, 17))
-    draw.ellipse((432, 150, 449, 167), fill=BRAND_BLUE + (255,))
-    _paste(image, "image9.png", (436, 153, 10, 10))
-    _paste(image, "image7.png", (456, 150, 17, 17))
-    _paste(image, "image5.png", (478, 150, 17, 17))
     return image
 
 
@@ -94,7 +88,7 @@ def generate_signature_image(name, role, email, output_path, phone=""):
     draw.text((246, 31), name, font=name_font, fill=BRAND_BLUE)
     if role:
         draw.text((245, 52), role, font=role_font, fill=SECONDARY_TEXT)
-    draw.line((245, 65, 323, 65), fill=BRAND_BLUE, width=1)
+    draw.line((245, 63, 515, 63), fill=ICON_BLUE, width=2)
     draw.text((273, 91), email, font=email_font, fill=SECONDARY_TEXT)
     draw.text((270, 117), "www.dinhodistribuidora.com.br", font=detail_font, fill=SECONDARY_TEXT)
     if phone:
