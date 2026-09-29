@@ -6,7 +6,13 @@ from app.services.employee_importer import build_employee_record, normalize_emai
 from app.services.signature_generator import generate_signature_image
 from app.services.admin_auth import authenticate_user
 from app.services.request_log import append_request_log, successful_request_emails
-from app.services.workbook_store import find_employee_by_email, list_employees, merge_emails_from_workbook, save_employee_to_workbook
+from app.services.workbook_store import (
+    find_employee_by_email,
+    list_employees,
+    merge_emails_from_workbook,
+    replace_employee_workbook_from_upload,
+    save_employee_to_workbook,
+)
 
 
 def test_normalize_email():
@@ -153,6 +159,41 @@ def test_save_employee_adds_phone_columns_without_losing_existing_data(tmp_path)
     assert values["Email"] == "ana@dinhodistribuidora.com.br"
     assert values["Celular"] == "+55 41 99999-0000"
     assert values["Cargo"] == "Analista Sênior"
+
+
+def test_xlsx_import_replaces_entire_base_and_preserves_every_column(tmp_path):
+    from io import BytesIO
+    from openpyxl import Workbook, load_workbook
+
+    workbook_path = tmp_path / "colaboradores.xlsx"
+    old = Workbook()
+    old.active.append(["Nome", "Cargo", "Email"])
+    old.active.append(["Registro antigo", "Cargo antigo", "antigo@empresa.com"])
+    old.save(workbook_path)
+
+    uploaded = Workbook()
+    uploaded.active.append([
+        "MAT", "Nome", "Razão Social", "Lotação", "Admissão", "CPF",
+        "Cargo", "Email", "Celular", "Ativo", "Campo adicional",
+    ])
+    uploaded.active.append([
+        123, "Pessoa Nova", "Empresa", "Unidade", "01/01/2026", "000",
+        "Cargo atualizado", "nova@empresa.com", "9999", "SIM", "Preservado",
+    ])
+    payload = BytesIO()
+    uploaded.save(payload)
+
+    replace_employee_workbook_from_upload(workbook_path, payload)
+
+    saved = load_workbook(workbook_path, data_only=True).active
+    headers = [cell.value for cell in saved[1]]
+    values = {headers[index]: saved.cell(2, index + 1).value for index in range(len(headers))}
+    assert saved.max_row == 2
+    assert values["Nome"] == "Pessoa Nova"
+    assert values["Cargo"] == "Cargo atualizado"
+    assert values["Campo adicional"] == "Preservado"
+    assert "Registro antigo" not in {cell.value for row in saved.iter_rows() for cell in row}
+    assert list(tmp_path.joinpath("backups").glob("*.xlsx"))
 
 
 def test_admin_area_requires_login_and_saves_new_employee_to_excel(tmp_path):

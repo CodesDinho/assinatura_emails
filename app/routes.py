@@ -16,6 +16,7 @@ from app.services.workbook_store import (
     get_employee,
     list_employees,
     replace_employee_workbook,
+    replace_employee_workbook_from_upload,
     save_employee_to_workbook,
 )
 
@@ -254,7 +255,14 @@ def register_routes(app):
                 preview.append(record)
             if errors or duplicates:
                 return render_template("admin_import.html", preview=preview, errors=errors, duplicates=duplicates)
-            replace_employee_workbook(current_app.config["EMPLOYEE_WORKBOOK_PATH"], preview)
+            if uploaded.filename.lower().endswith((".xlsx", ".xlsm")):
+                # Preserve the complete RH workbook and replace the previous base;
+                # rebuilding only selected fields would discard operational columns.
+                replace_employee_workbook_from_upload(
+                    current_app.config["EMPLOYEE_WORKBOOK_PATH"], uploaded.stream
+                )
+            else:
+                replace_employee_workbook(current_app.config["EMPLOYEE_WORKBOOK_PATH"], preview)
             message = f"Importação concluída: {len(preview)} colaboradores salvos."
             if without_email:
                 message += f" {without_email} registro(s) ainda estão sem e-mail."

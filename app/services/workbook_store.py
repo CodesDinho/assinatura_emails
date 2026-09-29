@@ -194,6 +194,33 @@ def replace_employee_workbook(workbook_path, employees):
             workbook.close()
 
 
+def replace_employee_workbook_from_upload(workbook_path, file_obj):
+    """Replace the official workbook with a validated uploaded XLSX in full."""
+    path = Path(workbook_path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with _WORKBOOK_LOCK:
+        descriptor, temporary_name = tempfile.mkstemp(
+            prefix=f".{path.stem}_upload_", suffix=path.suffix, dir=path.parent
+        )
+        os.close(descriptor)
+        temporary_path = Path(temporary_name)
+        try:
+            file_obj.seek(0)
+            with temporary_path.open("wb") as destination:
+                shutil.copyfileobj(file_obj, destination)
+
+            # Refuse a corrupt or non-Excel payload before touching production data.
+            uploaded = load_workbook(temporary_path, read_only=True, data_only=False)
+            uploaded.close()
+
+            if path.exists():
+                _backup(path)
+            os.replace(temporary_path, path)
+        finally:
+            if temporary_path.exists():
+                temporary_path.unlink()
+
+
 def merge_emails_from_workbook(workbook_path, email_workbook_path):
     """Fill blank employee e-mails from unique exact normalized-name matches."""
     path = Path(workbook_path)
