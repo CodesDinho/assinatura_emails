@@ -5,6 +5,8 @@ from pathlib import Path
 
 from PIL import Image, ImageDraw, ImageFont
 
+from app.services.text_formatting import format_job_title, format_person_name
+
 
 BASE_DIR = Path(__file__).resolve().parents[2]
 ART_DIR = BASE_DIR / "assets" / "signature"
@@ -71,8 +73,8 @@ def generate_signature_image(name, role, email, output_path, phone=""):
     output = Path(output_path)
     output.parent.mkdir(parents=True, exist_ok=True)
 
-    name = (name or "Nome do Colaborador").strip()
-    role = (role or "").strip()
+    name = format_person_name(name or "Nome do Colaborador")
+    role = format_job_title(role)
     email = (email or "colaborador@empresa.com").strip().lower()
     phone = (phone or "").strip()
 

@@ -9,6 +9,8 @@ from pathlib import Path
 
 from openpyxl import Workbook, load_workbook
 
+from app.services.text_formatting import format_job_title, format_person_name
+
 
 _WORKBOOK_LOCK = threading.RLock()
 
@@ -103,8 +105,8 @@ def list_employees(workbook_path):
                     continue
                 employees.append({
                     "id": row_number,
-                    "full_name": full_name,
-                    "job_title": value("cargo", "cargo oficial", "role", "job_title"),
+                    "full_name": format_person_name(full_name),
+                    "job_title": format_job_title(value("cargo", "cargo oficial", "role", "job_title")),
                     "email": value("email", "e-mail", "e_mail").lower(),
                     "phone": value("celular", "telefone", "telefone celular", "celular corporativo", "phone"),
                     "active": _is_active(value("ativo", "active")),

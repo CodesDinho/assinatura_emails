@@ -4,6 +4,7 @@ from app import create_app
 from app.services.email_sender import resolve_smtp_settings
 from app.services.employee_importer import build_employee_record, normalize_email, validate_employee_row
 from app.services.signature_generator import ICON_BLUE, _font, generate_signature_image
+from app.services.text_formatting import format_job_title, format_person_name
 from app.services.admin_auth import authenticate_user
 from app.services.request_log import append_request_log, successful_request_emails
 from app.services.workbook_store import (
@@ -17,6 +18,12 @@ from app.services.workbook_store import (
 
 def test_normalize_email():
     assert normalize_email("  Ana.Maria@Empresa.COM ") == "ana.maria@empresa.com"
+
+
+def test_formats_uppercase_employee_name_and_job_title():
+    assert format_person_name("ROBERSON AUGUSTO DE SOUZA") == "Roberson Augusto de Souza"
+    assert format_job_title("COORDENADOR DE T.I.") == "Coordenador de T.I"
+    assert format_job_title("ANALISTA DE RH") == "Analista de RH"
 
 
 def test_validate_employee_row_rejects_invalid_email():
