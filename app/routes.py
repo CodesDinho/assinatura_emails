@@ -233,22 +233,32 @@ def register_routes(app):
                 return render_template("admin_import.html")
             data = read_employee_rows(uploaded.stream, uploaded.filename)
             preview, duplicates, errors, seen = [], [], [], set()
+            without_email = 0
             for row in data:
                 record = build_employee_record(row)
-                validation_issues = validate_employee_row(row)
+                # A base oficial do RH também pode conter colaboradores ainda sem
+                # e-mail. Eles permanecem no cadastro, mas não conseguem consultar
+                # uma assinatura até que o endereço seja preenchido.
+                validation_issues = validate_employee_row(row, require_email=False)
                 if validation_issues:
                     errors.append({"row": row, "issues": validation_issues})
                     continue
                 email = record["email"]
-                if email in seen:
+                if email and email in seen:
                     duplicates.append(email)
                     continue
-                seen.add(email)
+                if email:
+                    seen.add(email)
+                else:
+                    without_email += 1
                 preview.append(record)
             if errors or duplicates:
                 return render_template("admin_import.html", preview=preview, errors=errors, duplicates=duplicates)
             replace_employee_workbook(current_app.config["EMPLOYEE_WORKBOOK_PATH"], preview)
-            flash("Importação concluída e salva na planilha oficial.")
+            message = f"Importação concluída: {len(preview)} colaboradores salvos."
+            if without_email:
+                message += f" {without_email} registro(s) ainda estão sem e-mail."
+            flash(message)
             return redirect(url_for("admin_dashboard"))
         return render_template("admin_import.html")
 

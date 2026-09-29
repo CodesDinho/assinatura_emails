@@ -19,6 +19,18 @@ def test_validate_employee_row_rejects_invalid_email():
     assert "email" in issues
 
 
+def test_validate_employee_row_allows_missing_email_during_import():
+    row = {"nome": "João Silva", "cargo": "Analista", "email": "", "ativo": "SIM"}
+
+    assert validate_employee_row(row, require_email=False) == {}
+
+
+def test_validate_employee_row_still_rejects_filled_invalid_email_during_import():
+    row = {"nome": "João Silva", "cargo": "Analista", "email": "joao@invalid", "ativo": "SIM"}
+
+    assert "email" in validate_employee_row(row, require_email=False)
+
+
 def test_build_employee_record_accepts_optional_celular():
     record = build_employee_record({
         "nome": "Ana Silva",

@@ -22,7 +22,7 @@ def normalize_name(value):
     return normalize_text(value)
 
 
-def validate_employee_row(row):
+def validate_employee_row(row, require_email=True):
     issues = {}
     full_name = normalize_name(row.get("nome") or row.get("full_name") or row.get("name"))
     job_title = normalize_text(row.get("cargo") or row.get("job_title") or row.get("role"))
@@ -32,7 +32,9 @@ def validate_employee_row(row):
         issues["nome"] = "Nome obrigatório."
     if not job_title:
         issues["cargo"] = "Cargo obrigatório."
-    if not email or not EMAIL_PATTERN.fullmatch(email):
+    if require_email and not email:
+        issues["email"] = "E-mail obrigatório."
+    elif email and not EMAIL_PATTERN.fullmatch(email):
         issues["email"] = "E-mail inválido."
 
     return issues

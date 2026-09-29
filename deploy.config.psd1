@@ -5,7 +5,7 @@
     Branch = 'main'
 
     TestCommands = @(
-        'python -m pytest -q'
+        'python -m pytest -q --basetemp=instance/pytest-temp -p no:cacheprovider'
     )
 
     GitHubActions = @{
