@@ -32,6 +32,18 @@ Para produção com HTTPS, configure `SESSION_COOKIE_SECURE=true`. Não versione
 python -m pytest -q
 ```
 
+## Commit e deploy automatizados
+
+O gatilho reutilizável executa testes, commit, push, aguarda a imagem do GitHub Actions,
+atualiza a stack no Portainer e valida a saúde da aplicação:
+
+```powershell
+.\scripts\commit-deploy.ps1 -Message "Descreva a alteração"
+```
+
+Consulte [docs/CATALOGO_COMMIT_DEPLOY.md](docs/CATALOGO_COMMIT_DEPLOY.md) para configuração,
+uso em outros projetos, segurança e recuperação.
+
 ## Estrutura
 
 - `app/`: rotas, templates e serviços;
