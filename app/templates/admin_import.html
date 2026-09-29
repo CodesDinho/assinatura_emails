@@ -3,11 +3,12 @@
 {% block content %}
 <section class="card">
   <h1>Importação de base</h1>
-  <form method="post" enctype="multipart/form-data">
+  <form id="import-form" method="post" enctype="multipart/form-data">
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
     <label for="file">Arquivo CSV/XLSX</label>
     <input id="file" name="file" type="file" accept=".csv,.xlsx,.xlsm" required>
-    <button type="submit">Importar</button>
+    <p id="selected-file" class="field-help">Nenhum arquivo selecionado.</p>
+    <button id="import-button" type="submit">Importar e substituir toda a base</button>
   </form>
 
   {% if preview %}
@@ -28,4 +29,19 @@
     </ul>
   {% endif %}
 </section>
+<script>
+(() => {
+  const form = document.getElementById('import-form');
+  const input = document.getElementById('file');
+  const selected = document.getElementById('selected-file');
+  const button = document.getElementById('import-button');
+  input.addEventListener('change', () => {
+    selected.textContent = input.files.length ? `Arquivo selecionado: ${input.files[0].name}` : 'Nenhum arquivo selecionado.';
+  });
+  form.addEventListener('submit', () => {
+    button.disabled = true;
+    button.textContent = 'Importando...';
+  });
+})();
+</script>
 {% endblock %}

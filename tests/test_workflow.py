@@ -183,7 +183,7 @@ def test_xlsx_import_replaces_entire_base_and_preserves_every_column(tmp_path):
     payload = BytesIO()
     uploaded.save(payload)
 
-    replace_employee_workbook_from_upload(workbook_path, payload)
+    result = replace_employee_workbook_from_upload(workbook_path, payload)
 
     saved = load_workbook(workbook_path, data_only=True).active
     headers = [cell.value for cell in saved[1]]
@@ -194,6 +194,8 @@ def test_xlsx_import_replaces_entire_base_and_preserves_every_column(tmp_path):
     assert values["Campo adicional"] == "Preservado"
     assert "Registro antigo" not in {cell.value for row in saved.iter_rows() for cell in row}
     assert list(tmp_path.joinpath("backups").glob("*.xlsx"))
+    assert len(result["sha256"]) == 64
+    assert result["size"] == workbook_path.stat().st_size
 
 
 def test_admin_area_requires_login_and_saves_new_employee_to_excel(tmp_path):

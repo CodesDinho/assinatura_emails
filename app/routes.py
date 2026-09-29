@@ -82,6 +82,14 @@ def _employee_from_form():
 def register_routes(app):
     app.jinja_env.globals["csrf_token"] = _csrf_token
 
+    @app.after_request
+    def disable_admin_cache(response):
+        if request.path.startswith("/admin"):
+            response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
+            response.headers["Pragma"] = "no-cache"
+            response.headers["Expires"] = "0"
+        return response
+
     @app.route("/", methods=["GET"])
     def home():
         return render_template("home.html")
@@ -258,12 +266,16 @@ def register_routes(app):
             if uploaded.filename.lower().endswith((".xlsx", ".xlsm")):
                 # Preserve the complete RH workbook and replace the previous base;
                 # rebuilding only selected fields would discard operational columns.
-                replace_employee_workbook_from_upload(
+                result = replace_employee_workbook_from_upload(
                     current_app.config["EMPLOYEE_WORKBOOK_PATH"], uploaded.stream
                 )
             else:
                 replace_employee_workbook(current_app.config["EMPLOYEE_WORKBOOK_PATH"], preview)
-            message = f"Importação concluída: {len(preview)} colaboradores salvos."
+                result = None
+            filename = Path(uploaded.filename).name
+            message = f"Importação concluída: {filename} — {len(preview)} colaboradores salvos."
+            if result:
+                message += f" Arquivo confirmado: {result['sha256'][:12]}."
             if without_email:
                 message += f" {without_email} registro(s) ainda estão sem e-mail."
             flash(message)

@@ -3,6 +3,7 @@ import shutil
 import tempfile
 import threading
 import unicodedata
+import hashlib
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -209,6 +210,8 @@ def replace_employee_workbook_from_upload(workbook_path, file_obj):
             with temporary_path.open("wb") as destination:
                 shutil.copyfileobj(file_obj, destination)
 
+            uploaded_sha256 = hashlib.sha256(temporary_path.read_bytes()).hexdigest()
+
             # Refuse a corrupt or non-Excel payload before touching production data.
             uploaded = load_workbook(temporary_path, read_only=True, data_only=False)
             uploaded.close()
@@ -216,6 +219,10 @@ def replace_employee_workbook_from_upload(workbook_path, file_obj):
             if path.exists():
                 _backup(path)
             os.replace(temporary_path, path)
+            persisted_sha256 = hashlib.sha256(path.read_bytes()).hexdigest()
+            if persisted_sha256 != uploaded_sha256:
+                raise OSError("A planilha gravada não corresponde ao arquivo enviado.")
+            return {"sha256": persisted_sha256, "size": path.stat().st_size}
         finally:
             if temporary_path.exists():
                 temporary_path.unlink()
