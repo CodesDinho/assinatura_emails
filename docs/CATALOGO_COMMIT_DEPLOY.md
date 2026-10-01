@@ -8,8 +8,8 @@ Automatiza o fluxo operacional de aplicações mantidas em Git e publicadas pelo
 2. prepara e cria o commit;
 3. envia a branch ao repositório remoto;
 4. aguarda o workflow do GitHub Actions concluir;
-5. atualiza a imagem configurada na stack do Portainer;
-6. publica o `compose.yaml` versionado, solicita `pull` da imagem e recria somente os serviços necessários;
+5. baixa explicitamente a imagem pelo registro autenticado do Portainer;
+6. substitui o container preservando sua configuração de execução e restaura o anterior automaticamente em caso de falha;
 7. confirma o endpoint de saúde, a imagem ativa, o estado do container, mounts obrigatórios e acesso aos logs.
 
 O processo não depende do Codex. A chave do Portainer e tokens nunca devem ser salvos no arquivo de configuração versionado.
@@ -59,7 +59,6 @@ Depois ajuste em `deploy.config.psd1`:
 | `Portainer.StackId` | ID da stack, obtido no Portainer/API |
 | `Portainer.RegistryId` | ID do registro privado cadastrado no Portainer |
 | `Portainer.PullTimeoutSeconds` | prazo máximo para baixar a imagem explicitamente |
-| `Portainer.UpdateTimeoutSeconds` | prazo máximo para atualizar a stack |
 | `ImageEnvironmentVariable` | variável da stack que contém a imagem imutável |
 | `ImageTemplate` | imagem com `{commit}` no lugar do SHA |
 | `ContainerName` | nome do container validado após o deploy |
@@ -102,8 +101,10 @@ O pipeline deve publicar exatamente esse padrão de tag. Tags imutáveis por SHA
 - `.env`, certificados e chaves conhecidos são bloqueados se entrarem no stage.
 - Arquivos ignorados pelo Git, como a planilha operacional deste projeto, não entram no commit.
 - Falha em testes, push, pipeline, Portainer ou health check interrompe o processo com código diferente de zero.
-- A imagem é baixada explicitamente com a credencial do registro antes da atualização; a chamada da stack possui timeout e não aguarda indefinidamente.
-- A stack mantém suas variáveis existentes; somente a variável da imagem é alterada.
+- A imagem é baixada explicitamente com a credencial do registro antes da substituição do container.
+- Variáveis, portas, rede, volumes, mounts, limites, política de reinício e health check do container atual são preservados.
+- O container anterior só é removido depois que o novo fica saudável; qualquer falha aciona rollback automático.
+- Alterações estruturais no `compose.yaml` não são aplicadas por este modo de deploy e devem ser publicadas separadamente no Portainer.
 - Volumes persistentes não são removidos pelo deploy.
 - Para reverter, execute novamente com o commit desejado ajustando temporariamente `ImageTemplate`, ou restaure a imagem anterior diretamente na stack.
 
@@ -113,4 +114,4 @@ O SQLite corporativo não faz parte da imagem nem do Git. Ele é montado do host
 
 Uploads feitos nesta aplicação ficam em `/app/data/pending_imports` e não alteram a base publicada. Após um upload, a TI deve executar a etapa 4 — Analisar Email/SharePoint x RH — no projeto de equalização, homologar a prévia e publicá-la. A planilha legada permanece apenas para rollback controlado.
 
-Após atualizar a stack, valide o endpoint `/health`, o estado do container, o mount `/shared:ro` e os logs. Um `503` com aviso de equalização ou indisponibilidade deve interromper a entrega; não habilite fallback automático para XLSX.
+Após substituir o container, valide o endpoint `/health`, o estado do container, o mount `/shared:ro` e os logs. Um `503` com aviso de equalização ou indisponibilidade deve interromper a entrega; não habilite fallback automático para XLSX.

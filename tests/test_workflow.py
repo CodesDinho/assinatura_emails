@@ -234,10 +234,12 @@ def test_deploy_script_prepulls_image_and_has_portainer_timeouts():
 
     assert "Invoke-PortainerImagePull" in script
     assert "'X-Registry-Auth'" in script
-    assert "pullImage        = $false" in script
+    assert "Update-PortainerContainer" in script
+    assert "/rename?name=" in script
+    assert "Rollback do container anterior concluido" in script
     assert "TimeoutSec" in script
     assert "RegistryId = 1" in config
-    assert "UpdateTimeoutSeconds = 120" in config
+    assert "PullTimeoutSeconds = 300" in config
 
 
 def test_workbook_is_the_employee_source_of_truth(tmp_path):

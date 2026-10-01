@@ -147,6 +147,93 @@ function Wait-HealthCheck {
     throw "O servico nao ficou saudavel em $TimeoutSeconds segundos: $Uri"
 }
 
+function Update-PortainerContainer {
+    param(
+        [hashtable]$Settings,
+        [string]$ApiKey,
+        [string]$Image
+    )
+    $portainer = $Settings.Portainer
+    $base = ([string]$portainer.Url).TrimEnd('/')
+    $dockerBase = "$base/api/endpoints/$($portainer.EndpointId)/docker"
+    $name = [string]$portainer.ContainerName
+    $encodedName = [Uri]::EscapeDataString($name)
+    $current = Invoke-PortainerApi -Method GET -Uri "$dockerBase/containers/$encodedName/json" -ApiKey $ApiKey
+    if ([string]$current.Config.Image -eq $Image -and $current.State.Running) {
+        Write-Host "Container '$name' ja utiliza $Image"
+        return
+    }
+
+    $mounts = @($current.Mounts | ForEach-Object {
+        $source = if ($_.Type -eq 'volume') { $_.Name } else { $_.Source }
+        $mount = @{ Type = $_.Type; Source = $source; Target = $_.Destination; ReadOnly = -not $_.RW }
+        if ($_.Type -eq 'bind') { $mount.BindOptions = @{ Propagation = $_.Propagation } }
+        $mount
+    })
+    $labels = @{}
+    $current.Config.Labels.psobject.Properties | ForEach-Object { $labels[$_.Name] = $_.Value }
+    $payload = @{
+        Image        = $Image
+        Env          = @($current.Config.Env)
+        Cmd          = @($current.Config.Cmd)
+        Entrypoint   = $current.Config.Entrypoint
+        WorkingDir   = $current.Config.WorkingDir
+        User         = $current.Config.User
+        Labels       = $labels
+        ExposedPorts = $current.Config.ExposedPorts
+        Healthcheck  = $current.Config.Healthcheck
+        HostConfig   = @{
+            PortBindings  = $current.HostConfig.PortBindings
+            RestartPolicy = $current.HostConfig.RestartPolicy
+            Mounts        = $mounts
+            NetworkMode   = $current.HostConfig.NetworkMode
+            Memory        = $current.HostConfig.Memory
+            NanoCpus      = $current.HostConfig.NanoCpus
+            SecurityOpt   = @($current.HostConfig.SecurityOpt)
+            LogConfig     = $current.HostConfig.LogConfig
+        }
+    }
+    $backupName = "$name-rollback-$((Get-Date).ToString('yyyyMMddHHmmss'))"
+    $created = $null
+    $renamed = $false
+    try {
+        Write-Host "Parando container anterior '$name'..."
+        Invoke-PortainerApi -Method POST -Uri "$dockerBase/containers/$encodedName/stop?t=15" -ApiKey $ApiKey | Out-Null
+        Invoke-PortainerApi -Method POST -Uri "$dockerBase/containers/$encodedName/rename?name=$([Uri]::EscapeDataString($backupName))" -ApiKey $ApiKey | Out-Null
+        $renamed = $true
+        $created = Invoke-PortainerApi -Method POST -Uri "$dockerBase/containers/create?name=$encodedName" -ApiKey $ApiKey -Body $payload
+        Invoke-PortainerApi -Method POST -Uri "$dockerBase/containers/$($created.Id)/start" -ApiKey $ApiKey | Out-Null
+
+        $deadline = (Get-Date).AddSeconds([int]$Settings.HealthCheck.TimeoutSeconds)
+        do {
+            Start-Sleep -Seconds 5
+            $replacement = Invoke-PortainerApi -Method GET -Uri "$dockerBase/containers/$($created.Id)/json" -ApiKey $ApiKey
+            $healthy = -not $replacement.State.Health -or $replacement.State.Health.Status -eq 'healthy'
+        } while ((-not $replacement.State.Running -or -not $healthy) -and (Get-Date) -lt $deadline)
+        if (-not $replacement.State.Running -or -not $healthy) {
+            throw "Novo container nao ficou saudavel (estado=$($replacement.State.Status), health=$($replacement.State.Health.Status))."
+        }
+        Invoke-WebRequest -Method Delete -Uri "$dockerBase/containers/$([Uri]::EscapeDataString($backupName))?force=true&v=false" -Headers @{ 'X-API-Key' = $ApiKey } -UseBasicParsing -TimeoutSec 30 | Out-Null
+        Write-Host "Container '$name' substituido por $Image"
+    } catch {
+        $failure = $_.Exception.Message
+        if ($created) {
+            try { Invoke-WebRequest -Method Delete -Uri "$dockerBase/containers/$encodedName?force=true&v=false" -Headers @{ 'X-API-Key' = $ApiKey } -UseBasicParsing -TimeoutSec 30 | Out-Null } catch {}
+        }
+        if ($renamed) {
+            try {
+                $backup = [Uri]::EscapeDataString($backupName)
+                Invoke-PortainerApi -Method POST -Uri "$dockerBase/containers/$backup/rename?name=$encodedName" -ApiKey $ApiKey | Out-Null
+                Invoke-PortainerApi -Method POST -Uri "$dockerBase/containers/$encodedName/start" -ApiKey $ApiKey | Out-Null
+                Write-Host 'Rollback do container anterior concluido.'
+            } catch {
+                Write-Warning "Falha critica no rollback: $($_.Exception.Message)"
+            }
+        }
+        throw $failure
+    }
+}
+
 function Confirm-DeployedContainer {
     param(
         [hashtable]$Settings,
@@ -257,24 +344,10 @@ try {
             throw "A stack esta no endpoint $($stack.EndpointId), nao no endpoint configurado $($portainer.EndpointId)."
         }
         $image = ([string]$portainer.ImageTemplate).Replace('{commit}', $commit)
-        $imageVariable = $stack.Env | Where-Object { $_.name -eq $portainer.ImageEnvironmentVariable } | Select-Object -First 1
-        if (-not $imageVariable) {
-            throw "Variavel '$($portainer.ImageEnvironmentVariable)' nao encontrada na stack."
-        }
-        $imageVariable.value = $image
-        $payload = @{
-            env              = @($stack.Env)
-            prune            = $true
-            # O pull autenticado ja foi concluido acima. Solicitar outro pull
-            # no compose fazia o endpoint ficar preso indefinidamente.
-            pullImage        = $false
-            stackFileContent = Get-Content -Raw -LiteralPath $composePath
-        }
         $deployed = $false
         if ($PSCmdlet.ShouldProcess($stack.Name, "publicar $image")) {
             Invoke-PortainerImagePull -Settings $settings -ApiKey $apiKey -Image $image
-            Invoke-PortainerApi -Method PUT -Uri "${stackUri}?endpointId=$($portainer.EndpointId)" -ApiKey $apiKey -Body $payload -TimeoutSeconds ([int]$portainer.UpdateTimeoutSeconds) | Out-Null
-            Write-Host "Stack '$($stack.Name)' atualizada para $image"
+            Update-PortainerContainer -Settings $settings -ApiKey $apiKey -Image $image
             $deployed = $true
         }
         if ($deployed) {
