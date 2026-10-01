@@ -35,13 +35,15 @@ function Invoke-PortainerApi {
         [ValidateSet('GET', 'POST', 'PUT')][string]$Method,
         [string]$Uri,
         [string]$ApiKey,
-        [object]$Body
+        [object]$Body,
+        [int]$TimeoutSeconds = 30
     )
     $params = @{
         Method      = $Method
         Uri         = $Uri
         Headers     = @{ 'X-API-Key' = $ApiKey }
         UseBasicParsing = $true
+        TimeoutSec  = $TimeoutSeconds
     }
     if ($null -ne $Body) {
         $params.ContentType = 'application/json'
@@ -50,6 +52,40 @@ function Invoke-PortainerApi {
     $response = Invoke-WebRequest @params
     if ([string]::IsNullOrWhiteSpace($response.Content)) { return $null }
     return $response.Content | ConvertFrom-Json
+}
+
+function Invoke-PortainerImagePull {
+    param(
+        [hashtable]$Settings,
+        [string]$ApiKey,
+        [string]$Image
+    )
+    $portainer = $Settings.Portainer
+    $registryId = [int]$portainer.RegistryId
+    if ($registryId -le 0) {
+        throw 'Portainer.RegistryId deve identificar o registro privado usado pela imagem.'
+    }
+    $separator = $Image.LastIndexOf(':')
+    if ($separator -le $Image.LastIndexOf('/')) {
+        throw "A imagem precisa conter uma tag explicita: $Image"
+    }
+    $repository = $Image.Substring(0, $separator)
+    $tag = $Image.Substring($separator + 1)
+    $registryAuth = [Convert]::ToBase64String(
+        [Text.Encoding]::UTF8.GetBytes((@{ registryId = $registryId } | ConvertTo-Json -Compress))
+    )
+    $base = ([string]$portainer.Url).TrimEnd('/')
+    $dockerBase = "$base/api/endpoints/$($portainer.EndpointId)/docker"
+    $uri = "$dockerBase/images/create?fromImage=$([Uri]::EscapeDataString($repository))&tag=$([Uri]::EscapeDataString($tag))"
+    Write-Host "Baixando imagem pelo Portainer: $Image"
+    $response = Invoke-WebRequest -Method Post -Uri $uri -Headers @{
+        'X-API-Key' = $ApiKey
+        'X-Registry-Auth' = $registryAuth
+    } -UseBasicParsing -TimeoutSec ([int]$portainer.PullTimeoutSeconds)
+    if ($response.StatusCode -lt 200 -or $response.StatusCode -ge 300 -or $response.Content -match '"error(?:Detail)?"') {
+        throw "Falha ao baixar a imagem '$Image' pelo Portainer."
+    }
+    Write-Host "Imagem disponivel no host: $Image"
 }
 
 function Wait-GitHubActions {
@@ -64,10 +100,13 @@ function Wait-GitHubActions {
     $uri = "https://api.github.com/repos/$($Settings.Repository)/actions/workflows/$encodedWorkflow/runs?head_sha=$Commit&per_page=10"
 
     Write-Host 'Aguardando o GitHub Actions publicar a imagem...'
+    $nextNotice = Get-Date
     while ((Get-Date) -lt $deadline) {
+        $statusMessage = 'workflow ainda nao localizado'
         try {
-            $result = Invoke-RestMethod -Method Get -Uri $uri -Headers $headers
+            $result = Invoke-RestMethod -Method Get -Uri $uri -Headers $headers -TimeoutSec 15
             $run = $result.workflow_runs | Sort-Object created_at -Descending | Select-Object -First 1
+            if ($run) { $statusMessage = "status '$($run.status)'" }
             if ($run.status -eq 'completed') {
                 if ($run.conclusion -ne 'success') {
                     throw "Pipeline terminou com status '$($run.conclusion)': $($run.html_url)"
@@ -77,7 +116,12 @@ function Wait-GitHubActions {
             }
         } catch {
             if ($_.Exception.Message -like 'Pipeline terminou*') { throw }
+            $statusMessage = "consulta indisponivel: $($_.Exception.Message)"
             Write-Verbose "Ainda nao foi possivel consultar o workflow: $($_.Exception.Message)"
+        }
+        if ((Get-Date) -ge $nextNotice) {
+            Write-Host "GitHub Actions: $statusMessage. Nova consulta em 10 segundos."
+            $nextNotice = (Get-Date).AddSeconds(30)
         }
         Start-Sleep -Seconds 10
     }
@@ -138,7 +182,7 @@ function Confirm-DeployedContainer {
     }
 
     $logsUri = "$dockerBase/containers/$containerName/logs?stdout=true&stderr=true&tail=100&timestamps=true"
-    $logs = Invoke-WebRequest -Method Get -Uri $logsUri -Headers @{ 'X-API-Key' = $ApiKey } -UseBasicParsing
+    $logs = Invoke-WebRequest -Method Get -Uri $logsUri -Headers @{ 'X-API-Key' = $ApiKey } -UseBasicParsing -TimeoutSec 30
     if ($logs.StatusCode -ne 200) {
         throw "Não foi possível consultar os logs do container '$($portainer.ContainerName)'."
     }
@@ -221,15 +265,22 @@ try {
         $payload = @{
             env              = @($stack.Env)
             prune            = $true
-            pullImage        = $true
+            # O pull autenticado ja foi concluido acima. Solicitar outro pull
+            # no compose fazia o endpoint ficar preso indefinidamente.
+            pullImage        = $false
             stackFileContent = Get-Content -Raw -LiteralPath $composePath
         }
+        $deployed = $false
         if ($PSCmdlet.ShouldProcess($stack.Name, "publicar $image")) {
-            Invoke-PortainerApi -Method PUT -Uri "${stackUri}?endpointId=$($portainer.EndpointId)" -ApiKey $apiKey -Body $payload | Out-Null
+            Invoke-PortainerImagePull -Settings $settings -ApiKey $apiKey -Image $image
+            Invoke-PortainerApi -Method PUT -Uri "${stackUri}?endpointId=$($portainer.EndpointId)" -ApiKey $apiKey -Body $payload -TimeoutSeconds ([int]$portainer.UpdateTimeoutSeconds) | Out-Null
             Write-Host "Stack '$($stack.Name)' atualizada para $image"
+            $deployed = $true
         }
-        Wait-HealthCheck -Uri $settings.HealthCheck.Url -TimeoutSeconds ([int]$settings.HealthCheck.TimeoutSeconds)
-        Confirm-DeployedContainer -Settings $settings -ApiKey $apiKey -ExpectedImage $image
+        if ($deployed) {
+            Wait-HealthCheck -Uri $settings.HealthCheck.Url -TimeoutSeconds ([int]$settings.HealthCheck.TimeoutSeconds)
+            Confirm-DeployedContainer -Settings $settings -ApiKey $apiKey -ExpectedImage $image
+        }
     }
 
     Write-Host "Concluido no commit $commit"

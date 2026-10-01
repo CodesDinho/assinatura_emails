@@ -227,6 +227,19 @@ def test_compose_mounts_shared_database_read_only():
     assert "/home/administrator/Desktop/codes/ti_dinho_slack/shared_data:/shared:ro" in compose
 
 
+def test_deploy_script_prepulls_image_and_has_portainer_timeouts():
+    root = Path(__file__).resolve().parent.parent
+    script = root.joinpath("scripts", "commit-deploy.ps1").read_text(encoding="utf-8")
+    config = root.joinpath("deploy.config.psd1").read_text(encoding="utf-8")
+
+    assert "Invoke-PortainerImagePull" in script
+    assert "'X-Registry-Auth'" in script
+    assert "pullImage        = $false" in script
+    assert "TimeoutSec" in script
+    assert "RegistryId = 1" in config
+    assert "UpdateTimeoutSeconds = 120" in config
+
+
 def test_workbook_is_the_employee_source_of_truth(tmp_path):
     from openpyxl import Workbook
 

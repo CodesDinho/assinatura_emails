@@ -57,6 +57,9 @@ Depois ajuste em `deploy.config.psd1`:
 | `Portainer.Url` | URL interna do Portainer |
 | `Portainer.EndpointId` | número exibido na URL `#!/<endpoint>/...` |
 | `Portainer.StackId` | ID da stack, obtido no Portainer/API |
+| `Portainer.RegistryId` | ID do registro privado cadastrado no Portainer |
+| `Portainer.PullTimeoutSeconds` | prazo máximo para baixar a imagem explicitamente |
+| `Portainer.UpdateTimeoutSeconds` | prazo máximo para atualizar a stack |
 | `ImageEnvironmentVariable` | variável da stack que contém a imagem imutável |
 | `ImageTemplate` | imagem com `{commit}` no lugar do SHA |
 | `ContainerName` | nome do container validado após o deploy |
@@ -99,6 +102,7 @@ O pipeline deve publicar exatamente esse padrão de tag. Tags imutáveis por SHA
 - `.env`, certificados e chaves conhecidos são bloqueados se entrarem no stage.
 - Arquivos ignorados pelo Git, como a planilha operacional deste projeto, não entram no commit.
 - Falha em testes, push, pipeline, Portainer ou health check interrompe o processo com código diferente de zero.
+- A imagem é baixada explicitamente com a credencial do registro antes da atualização; a chamada da stack possui timeout e não aguarda indefinidamente.
 - A stack mantém suas variáveis existentes; somente a variável da imagem é alterada.
 - Volumes persistentes não são removidos pelo deploy.
 - Para reverter, execute novamente com o commit desejado ajustando temporariamente `ImageTemplate`, ou restaure a imagem anterior diretamente na stack.

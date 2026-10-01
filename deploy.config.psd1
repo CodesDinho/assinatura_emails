@@ -22,6 +22,9 @@
         Url = 'http://10.1.1.153:9090'
         EndpointId = 3
         StackId = 11
+        RegistryId = 1
+        PullTimeoutSeconds = 300
+        UpdateTimeoutSeconds = 120
         ApiKeyEnvironmentVariable = 'PORTAINER_API_KEY'
         # Alternativa local conveniente; este arquivo já é ignorado pelo Git.
         ApiKeyDotEnvPath = '.env'
