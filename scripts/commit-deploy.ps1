@@ -337,15 +337,9 @@ try {
             throw "Defina $($portainer.ApiKeyEnvironmentVariable) no ambiente ou no .env ignorado pelo Git."
         }
 
-        $base = ([string]$portainer.Url).TrimEnd('/')
-        $stackUri = "$base/api/stacks/$($portainer.StackId)"
-        $stack = Invoke-PortainerApi -Method GET -Uri $stackUri -ApiKey $apiKey
-        if ([int]$stack.EndpointId -ne [int]$portainer.EndpointId) {
-            throw "A stack esta no endpoint $($stack.EndpointId), nao no endpoint configurado $($portainer.EndpointId)."
-        }
         $image = ([string]$portainer.ImageTemplate).Replace('{commit}', $commit)
         $deployed = $false
-        if ($PSCmdlet.ShouldProcess($stack.Name, "publicar $image")) {
+        if ($PSCmdlet.ShouldProcess($portainer.ContainerName, "publicar $image")) {
             Invoke-PortainerImagePull -Settings $settings -ApiKey $apiKey -Image $image
             Update-PortainerContainer -Settings $settings -ApiKey $apiKey -Image $image
             $deployed = $true

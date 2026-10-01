@@ -21,13 +21,11 @@
     Portainer = @{
         Url = 'http://10.1.1.153:9090'
         EndpointId = 3
-        StackId = 11
         RegistryId = 1
         PullTimeoutSeconds = 300
         ApiKeyEnvironmentVariable = 'PORTAINER_API_KEY'
         # Alternativa local conveniente; este arquivo já é ignorado pelo Git.
         ApiKeyDotEnvPath = '.env'
-        ImageEnvironmentVariable = 'ASSINATURA_EMAILS_IMAGE'
         ImageTemplate = 'ghcr.io/codesdinho/assinatura-emails:sha-{commit}'
         ContainerName = 'assinatura-emails'
         RequiredReadOnlyMount = '/shared'

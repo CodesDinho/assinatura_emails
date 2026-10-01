@@ -35,7 +35,7 @@ Opções úteis:
 .\scripts\commit-deploy.ps1 -Message "Atualiza documentação" -SkipDeploy
 ```
 
-O arquivo `deploy.config.psd1` contém o endereço do Portainer, endpoint, stack, branch, workflow, padrão da imagem e health check deste serviço. A chave é lida de `PORTAINER_API_KEY` no ambiente ou do `.env` local ignorado pelo Git.
+O arquivo `deploy.config.psd1` contém o endereço do Portainer, endpoint, registro, container, branch, workflow, padrão da imagem e health check deste serviço. A chave é lida de `PORTAINER_API_KEY` no ambiente ou do `.env` local ignorado pelo Git.
 
 ## Adoção em outro projeto
 
@@ -56,10 +56,8 @@ Depois ajuste em `deploy.config.psd1`:
 | `GitHubActions.Workflow` | nome ou arquivo do workflow que publica a imagem |
 | `Portainer.Url` | URL interna do Portainer |
 | `Portainer.EndpointId` | número exibido na URL `#!/<endpoint>/...` |
-| `Portainer.StackId` | ID da stack, obtido no Portainer/API |
 | `Portainer.RegistryId` | ID do registro privado cadastrado no Portainer |
 | `Portainer.PullTimeoutSeconds` | prazo máximo para baixar a imagem explicitamente |
-| `ImageEnvironmentVariable` | variável da stack que contém a imagem imutável |
 | `ImageTemplate` | imagem com `{commit}` no lugar do SHA |
 | `ContainerName` | nome do container validado após o deploy |
 | `RequiredReadOnlyMount` | destino que deve existir como mount somente leitura |
@@ -77,9 +75,11 @@ Para repositório privado, também configure um token capaz de consultar Actions
 $env:GITHUB_TOKEN = 'github_pat_...'
 ```
 
-## Pré-requisitos da stack
+## Pré-requisitos do container
 
-A stack deve usar uma variável para a imagem, por exemplo:
+O container precisa existir inicialmente com seus volumes, portas, rede, variáveis e health check configurados. O gatilho preserva essa configuração e troca somente a imagem. O `compose.yaml` permanece como especificação versionada e referência para recriações estruturais controladas.
+
+Para projetos que ainda usam uma stack gerenciada no Portainer, a imagem pode continuar declarada por variável, por exemplo:
 
 ```yaml
 services:
@@ -87,10 +87,9 @@ services:
     image: ${APP_IMAGE}
 ```
 
-No Portainer, cadastre `APP_IMAGE` e configure no gatilho:
+Configure no gatilho:
 
 ```powershell
-ImageEnvironmentVariable = 'APP_IMAGE'
 ImageTemplate = 'ghcr.io/empresa/projeto:sha-{commit}'
 ```
 

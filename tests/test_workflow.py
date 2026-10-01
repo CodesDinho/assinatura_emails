@@ -240,6 +240,8 @@ def test_deploy_script_prepulls_image_and_has_portainer_timeouts():
     assert "TimeoutSec" in script
     assert "RegistryId = 1" in config
     assert "PullTimeoutSeconds = 300" in config
+    assert "StackId" not in config
+    assert "/api/stacks/" not in script
 
 
 def test_workbook_is_the_employee_source_of_truth(tmp_path):
