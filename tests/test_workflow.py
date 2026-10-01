@@ -1,4 +1,5 @@
 from pathlib import Path
+import sqlite3
 
 from app import create_app
 from app.services.email_sender import resolve_smtp_settings
@@ -14,6 +15,38 @@ from app.services.workbook_store import (
     replace_employee_workbook_from_upload,
     save_employee_to_workbook,
 )
+
+
+def _corporate_database(path, *, published=True):
+    connection = sqlite3.connect(path)
+    connection.executescript("""
+        CREATE TABLE people (
+            id INTEGER PRIMARY KEY, nome TEXT, cargo TEXT, email TEXT, celular TEXT,
+            ativo TEXT, ativo_rh INTEGER, email_valido INTEGER, status_validacao TEXT,
+            mat TEXT, razao_social TEXT
+        );
+        CREATE TABLE rh_importacoes (
+            id INTEGER PRIMARY KEY, source_hash TEXT, arquivo_origem TEXT,
+            imported_at TEXT, imported_by TEXT, status TEXT, ativos INTEGER,
+            com_email INTEGER, sem_email INTEGER
+        );
+        CREATE VIEW rh_assinaturas_colaboradores AS SELECT * FROM people;
+    """)
+    connection.executemany(
+        "INSERT INTO people VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        [
+            (1, "Maria Teste", "Analista", "maria@empresa.com", "1111", "SIM", 1, 1, "APTO", "1", "Empresa"),
+            (2, "Pessoa Inativa", "Gestor", "inativa@empresa.com", "", "NÃO", 0, 1, "INATIVO", "2", "Empresa"),
+            (3, "Sem E-mail Válido", "Operador", "pendente@empresa.com", "", "SIM", 1, 0, "SEM_EMAIL", "3", "Empresa"),
+        ],
+    )
+    if published:
+        connection.execute(
+            "INSERT INTO rh_importacoes VALUES (1, 'abc', 'rh.xlsx', '2026-09-30T12:00:00Z', 'ti', 'PUBLICADO', 2, 1, 1)"
+        )
+    connection.commit()
+    connection.close()
+    return path
 
 
 def test_normalize_email():
@@ -83,13 +116,8 @@ def test_signature_uses_bundled_poppins_bold():
 
 
 def test_public_lookup_route(tmp_path):
-    from openpyxl import Workbook
-
-    workbook_path = tmp_path / "colaboradores.xlsx"
-    workbook = Workbook()
-    workbook.active.append(["Nome", "Cargo", "Email", "Celular", "Ativo"])
-    workbook.save(workbook_path)
-    app = create_app(test_config={"TESTING": True, "EMPLOYEE_WORKBOOK_PATH": str(workbook_path)})
+    database_path = _corporate_database(tmp_path / "corporate.db")
+    app = create_app(test_config={"TESTING": True, "SHARED_SQLITE_PATH": str(database_path)})
     with app.test_client() as client:
         response = client.get("/health")
         assert response.status_code == 200
@@ -100,6 +128,88 @@ def test_public_lookup_route(tmp_path):
         assert "entre em contato com o RH" in home.text
         assert "Opções &gt; Email &gt; Assinaturas" in home.text
         assert "respostas e encaminhamentos" in home.text
+
+
+def test_public_lookup_accepts_only_active_employee_with_valid_email(tmp_path):
+    database_path = _corporate_database(tmp_path / "corporate.db")
+    app = create_app(test_config={"TESTING": True, "SHARED_SQLITE_PATH": str(database_path)})
+
+    with app.test_client() as client:
+        active = client.post("/consultar", data={"email": "MARIA@EMPRESA.COM"})
+        inactive = client.post("/consultar", data={"email": "inativa@empresa.com"})
+        invalid = client.post("/consultar", data={"email": "pendente@empresa.com"})
+
+    assert "Maria Teste" in active.text
+    assert "Nenhum cadastro ativo" in inactive.text
+    assert "ainda não possui um e-mail válido" in invalid.text
+
+
+def test_missing_publication_shows_exact_equalization_warning(tmp_path):
+    database_path = _corporate_database(tmp_path / "corporate.db", published=False)
+    app = create_app(test_config={"TESTING": True, "SHARED_SQLITE_PATH": str(database_path)})
+
+    with app.test_client() as client:
+        response = client.post("/consultar", data={"email": "maria@empresa.com"})
+
+    assert response.status_code == 503
+    assert (
+        "A base de dados ainda não está equalizada. Solicite à TI que execute a rotina no projeto de "
+        "equalização de usuários, sistemas e equipamentos."
+    ) in response.text
+
+
+def test_unavailable_database_does_not_fall_back_to_legacy_workbook(tmp_path):
+    from openpyxl import Workbook
+
+    workbook_path = tmp_path / "legacy.xlsx"
+    workbook = Workbook()
+    workbook.active.append(["Nome", "Cargo", "Email", "Ativo"])
+    workbook.active.append(["Legado", "Analista", "legado@empresa.com", "SIM"])
+    workbook.save(workbook_path)
+    app = create_app(test_config={
+        "TESTING": True,
+        "SHARED_SQLITE_PATH": str(tmp_path / "missing.db"),
+        "EMPLOYEE_WORKBOOK_PATH": str(workbook_path),
+    })
+
+    with app.test_client() as client:
+        response = client.post("/consultar", data={"email": "legado@empresa.com"})
+
+    assert response.status_code == 503
+    assert "base corporativa está indisponível" in response.text
+    assert "Legado" not in response.text
+
+
+def test_send_uses_email_returned_by_sqlite(tmp_path, monkeypatch):
+    database_path = _corporate_database(tmp_path / "corporate.db")
+    sent_to = []
+    monkeypatch.setattr(
+        "app.routes.send_signature_email",
+        lambda email, *_args, **_kwargs: sent_to.append(email) or {"status": "simulated"},
+    )
+    app = create_app(test_config={
+        "TESTING": True,
+        "SECRET_KEY": "test-secret",
+        "SHARED_SQLITE_PATH": str(database_path),
+        "GENERATED_FILES_PATH": str(tmp_path / "generated"),
+        "REQUEST_LOG_PATH": str(tmp_path / "requests.jsonl"),
+    })
+
+    with app.test_client() as client:
+        confirmation = client.post("/consultar", data={"email": "MARIA@EMPRESA.COM"})
+        token = confirmation.text.split('name="csrf_token" value="', 1)[1].split('"', 1)[0]
+        client.post("/solicitar", data={
+            "csrf_token": token,
+            "email": "MARIA@EMPRESA.COM",
+            "phone": "1111",
+        })
+
+    assert sent_to == ["maria@empresa.com"]
+
+
+def test_compose_mounts_shared_database_read_only():
+    compose = (Path(__file__).resolve().parent.parent / "compose.yaml").read_text(encoding="utf-8")
+    assert "/home/administrator/Desktop/codes/ti_dinho_slack/shared_data:/shared:ro" in compose
 
 
 def test_workbook_is_the_employee_source_of_truth(tmp_path):
@@ -216,18 +326,18 @@ def test_xlsx_import_replaces_entire_base_and_preserves_every_column(tmp_path):
     assert result["size"] == workbook_path.stat().st_size
 
 
-def test_admin_area_requires_login_and_saves_new_employee_to_excel(tmp_path):
-    from openpyxl import Workbook, load_workbook
+def test_admin_area_lists_pending_upload_without_changing_published_links(tmp_path):
+    from io import BytesIO
+    from openpyxl import Workbook
 
-    workbook_path = tmp_path / "colaboradores.xlsx"
-    workbook = Workbook()
-    workbook.active.append(["MAT", "Nome", "Cargo"])
-    workbook.save(workbook_path)
+    database_path = _corporate_database(tmp_path / "corporate.db")
+    before = database_path.read_bytes()
     users_path = Path(__file__).resolve().parent.parent / "config" / "users.json"
     app = create_app(test_config={
         "TESTING": True,
         "SECRET_KEY": "test-secret",
-        "EMPLOYEE_WORKBOOK_PATH": str(workbook_path),
+        "SHARED_SQLITE_PATH": str(database_path),
+        "PENDING_IMPORTS_PATH": str(tmp_path / "pending"),
         "ADMIN_USERS_PATH": str(users_path),
         "REQUEST_LOG_PATH": str(tmp_path / "requests.jsonl"),
         "GENERATED_FILES_PATH": str(tmp_path / "generated"),
@@ -240,38 +350,33 @@ def test_admin_area_requires_login_and_saves_new_employee_to_excel(tmp_path):
         login = client.post("/admin/login", data={"username": "rh", "password": "rh", "csrf_token": token})
         assert login.status_code == 302
 
-        new_page = client.get("/admin/colaboradores/novo")
-        token = new_page.text.split('name="csrf_token" value="', 1)[1].split('"', 1)[0]
-        created = client.post("/admin/colaboradores/novo", data={
+        page = client.get("/admin/import")
+        token = page.text.split('name="csrf_token" value="', 1)[1].split('"', 1)[0]
+        workbook = Workbook()
+        workbook.active.append(["Nome", "Cargo", "Email", "Ativo"])
+        workbook.active.append(["Nova Pessoa", "Analista", "nova@empresa.com", "SIM"])
+        payload = BytesIO()
+        workbook.save(payload)
+        payload.seek(0)
+        created = client.post("/admin/import", data={
             "csrf_token": token,
-            "full_name": "Maria Teste",
-            "job_title": "Analista",
-            "email": "maria.teste@dinhodistribuidora.com.br",
-            "phone": "+55 41 98888-7777",
-            "active": "1",
-        })
-        assert created.status_code == 302
+            "file": (payload, "rh_nova.xlsx"),
+        }, content_type="multipart/form-data", follow_redirects=True)
+        assert "Carga pendente recebida" in created.text
+        assert "rh_nova.xlsx" in created.text
 
-    saved = load_workbook(workbook_path, data_only=True).active
-    headers = [cell.value for cell in saved[1]]
-    assert saved.cell(2, headers.index("Celular") + 1).value == "+55 41 98888-7777"
-    assert len(list(tmp_path.joinpath("backups").glob("*.xlsx"))) >= 1
-    assert not list(tmp_path.glob("*.sqlite*"))
+    assert database_path.read_bytes() == before
+    assert list((tmp_path / "pending").glob("*.xlsx"))
 
 
 def test_employee_can_update_phone_before_generating_signature(tmp_path, monkeypatch):
-    from openpyxl import Workbook, load_workbook
-
-    workbook_path = tmp_path / "colaboradores.xlsx"
-    workbook = Workbook()
-    workbook.active.append(["Nome", "Cargo", "Email", "Celular", "Ativo"])
-    workbook.active.append(["Maria Teste", "Analista", "maria@empresa.com", "1111", "SIM"])
-    workbook.save(workbook_path)
+    database_path = _corporate_database(tmp_path / "corporate.db")
+    before = database_path.read_bytes()
     log_path = tmp_path / "requests.jsonl"
     app = create_app(test_config={
         "TESTING": True,
         "SECRET_KEY": "test-secret",
-        "EMPLOYEE_WORKBOOK_PATH": str(workbook_path),
+        "SHARED_SQLITE_PATH": str(database_path),
         "REQUEST_LOG_PATH": str(log_path),
         "GENERATED_FILES_PATH": str(tmp_path / "generated"),
     })
@@ -292,26 +397,18 @@ def test_employee_can_update_phone_before_generating_signature(tmp_path, monkeyp
         assert sent.status_code == 200
         assert "maria@empresa.com" in successful_request_emails(log_path)
 
-    saved = load_workbook(workbook_path, data_only=True).active
-    assert saved.cell(2, 4).value == "+55 41 99999-0000"
-    assert list(tmp_path.joinpath("backups").glob("*.xlsx"))
+    assert database_path.read_bytes() == before
 
 
 def test_admin_dashboard_marks_generated_signature_and_has_sortable_headers(tmp_path):
-    from openpyxl import Workbook
-
-    workbook_path = tmp_path / "colaboradores.xlsx"
-    workbook = Workbook()
-    workbook.active.append(["Nome", "Cargo", "Email", "Celular", "Ativo"])
-    workbook.active.append(["Maria Teste", "Analista", "maria@empresa.com", "", "SIM"])
-    workbook.save(workbook_path)
+    database_path = _corporate_database(tmp_path / "corporate.db")
     log_path = tmp_path / "requests.jsonl"
     append_request_log(log_path, "maria@empresa.com", "sent", "assinatura enviada")
     users_path = Path(__file__).resolve().parent.parent / "config" / "users.json"
     app = create_app(test_config={
         "TESTING": True,
         "SECRET_KEY": "test-secret",
-        "EMPLOYEE_WORKBOOK_PATH": str(workbook_path),
+        "SHARED_SQLITE_PATH": str(database_path),
         "ADMIN_USERS_PATH": str(users_path),
         "REQUEST_LOG_PATH": str(log_path),
     })

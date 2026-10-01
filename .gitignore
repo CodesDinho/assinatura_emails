@@ -2,7 +2,9 @@ __pycache__/
 *.pyc
 .env
 instance/
+*.sqlite
 *.sqlite3
+*.db
 *.log
 .pytest_cache/
 .venv/
@@ -16,6 +18,7 @@ data/*.pptx
 data/*.zip
 data/~$*
 data/backups/
+data/pending_imports/
 generated/
 debug_*.py
 inspect_*.py

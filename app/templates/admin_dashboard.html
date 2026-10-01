@@ -5,7 +5,7 @@
   <div class="page-header">
     <div>
       <h1>Gestão de colaboradores</h1>
-      <p>Olá, {{ session['admin_user']['name'] }}. Total: {{ total }} | Ativos: {{ active }} | Inativos: {{ inactive }}</p>
+      <p>Olá, {{ session['admin_user']['name'] }}. Total: {{ total }} | Ativos: {{ active }} | Aptos: {{ ready }} | Sem e-mail válido: {{ missing_email }}</p>
     </div>
     <form class="logout-form" method="post" action="{{ url_for('admin_logout') }}">
       <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
@@ -13,9 +13,25 @@
     </form>
   </div>
   <div class="actions">
-    <a class="button-link" href="{{ url_for('admin_employee_new') }}">Novo colaborador</a>
-    <a class="button-link secondary" href="{{ url_for('admin_import') }}">Importar base</a>
+    <a class="button-link secondary" href="{{ url_for('admin_import') }}">Enviar carga pendente</a>
   </div>
+
+  <h2>Publicação corporativa</h2>
+  {% if corporate_status['equalized'] %}
+    <p>Última publicação: {{ corporate_status['latest']['imported_at'] }} | Arquivo: {{ corporate_status['latest']['arquivo_origem'] }} | Responsável: {{ corporate_status['latest']['imported_by'] }}</p>
+  {% else %}
+    <p class="error">{{ corporate_status['message'] }}</p>
+  {% endif %}
+
+  <h2>Cargas pendentes</h2>
+  <p>Esses arquivos não alteram a base publicada. Solicite à TI a etapa 4 — Analisar Email/SharePoint x RH — e a publicação da prévia homologada.</p>
+  <ul>
+    {% for item in pending_imports %}
+      <li>{{ item['uploaded_at'] }} — {{ item['filename'] }} — {{ item['uploaded_by'] }} — {{ item['row_count'] }} registros — {{ item['status'] }}</li>
+    {% else %}
+      <li>Nenhuma carga pendente.</li>
+    {% endfor %}
+  </ul>
 
   <h2>Colaboradores</h2>
   <div class="table-wrapper"><table id="employees-table">
@@ -26,7 +42,6 @@
       <th><button class="sort-button" type="button" data-column="3">Celular <span aria-hidden="true">↕</span></button></th>
       <th><button class="sort-button" type="button" data-column="4">Status <span aria-hidden="true">↕</span></button></th>
       <th><button class="sort-button" type="button" data-column="5">Assinatura gerada <span aria-hidden="true">↕</span></button></th>
-      <th>Ações</th>
     </tr></thead>
     <tbody>
     {% for employee in employees %}
@@ -34,10 +49,9 @@
         <td>{{ employee['full_name'] }}</td><td>{{ employee['job_title'] }}</td><td>{{ employee['email'] }}</td><td>{{ employee['phone'] or '—' }}</td>
         <td>{{ 'Ativo' if employee['active'] else 'Inativo' }}</td>
         <td data-sort-value="{{ 1 if employee['signature_generated'] else 0 }}"><span class="signature-state {{ 'generated' if employee['signature_generated'] else 'pending' }}">{{ 'Sim' if employee['signature_generated'] else 'Não' }}</span></td>
-        <td><a href="{{ url_for('admin_employee_edit', employee_id=employee['id']) }}">Editar</a></td>
       </tr>
     {% else %}
-      <tr><td colspan="7">Nenhum colaborador cadastrado.</td></tr>
+      <tr><td colspan="6">Nenhum colaborador disponível.</td></tr>
     {% endfor %}
     </tbody>
   </table></div>

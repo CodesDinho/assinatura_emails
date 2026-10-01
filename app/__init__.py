@@ -20,6 +20,8 @@ def create_app(test_config=None):
             "EMPLOYEE_WORKBOOK_PATH",
             str(BASE_DIR / "data" / "colaboradores_ativos_2409.xlsx"),
         ),
+        SHARED_SQLITE_PATH=os.getenv("SHARED_SQLITE_PATH", "/shared/slack_apps.db"),
+        PENDING_IMPORTS_PATH=os.getenv("PENDING_IMPORTS_PATH", str(BASE_DIR / "data" / "pending_imports")),
         ADMIN_USERS_PATH=os.getenv("ADMIN_USERS_PATH", str(BASE_DIR / "config" / "users.json")),
         REQUEST_LOG_PATH=os.getenv("REQUEST_LOG_PATH", str(INSTANCE_DIR / "request_logs.jsonl")),
         GENERATED_FILES_PATH=os.getenv("GENERATED_FILES_PATH", str(INSTANCE_DIR / "generated")),
@@ -45,17 +47,15 @@ def create_app(test_config=None):
         app.config.update(test_config)
 
     INSTANCE_DIR.mkdir(exist_ok=True)
-    from app.services.workbook_store import ensure_employee_columns
-
-    if Path(app.config["EMPLOYEE_WORKBOOK_PATH"]).exists():
-        ensure_employee_columns(app.config["EMPLOYEE_WORKBOOK_PATH"])
     register_routes(app)
 
     @app.route("/health")
     def health():
-        workbook = Path(app.config["EMPLOYEE_WORKBOOK_PATH"])
-        available = workbook.exists()
-        return jsonify({"status": "ok" if available else "error", "workbook": str(workbook), "workbook_available": available}), 200 if available else 503
+        from app.services.corporate_employee_store import equalization_status
+
+        status = equalization_status()
+        healthy = status["available"] and status["equalized"]
+        return jsonify({"status": "ok" if healthy else "error", "corporate_database": status}), 200 if healthy else 503
 
     return app
 

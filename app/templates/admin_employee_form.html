@@ -3,7 +3,7 @@
 {% block content %}
 <section class="card">
   <h1>{{ 'Novo colaborador' if is_new else 'Editar colaborador' }}</h1>
-  <p>As alterações serão salvas também na planilha oficial.</p>
+  <p>A base corporativa é somente leitura. Alterações permanentes devem ser tratadas no projeto de equalização.</p>
   {% if issues %}<div class="alert error">{% for field, message in issues.items() %}<div>{{ message }}</div>{% endfor %}</div>{% endif %}
   <form method="post">
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">

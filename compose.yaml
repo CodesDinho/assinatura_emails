@@ -7,6 +7,8 @@ services:
       SECRET_KEY: ${SECRET_KEY:?SECRET_KEY obrigatoria}
       APP_BASE_URL: ${APP_BASE_URL:-http://10.1.1.153:8505}
       EMPLOYEE_WORKBOOK_PATH: /app/data/colaboradores_ativos_2409.xlsx
+      SHARED_SQLITE_PATH: /shared/slack_apps.db
+      PENDING_IMPORTS_PATH: /app/data/pending_imports
       REQUEST_LOG_PATH: /app/instance/request_logs.jsonl
       GENERATED_FILES_PATH: /app/instance/generated
       ADMIN_USERS_PATH: /app/config/users.json
@@ -23,6 +25,7 @@ services:
     volumes:
       - assinatura-emails-data:/app/data
       - assinatura-emails-instance:/app/instance
+      - /home/administrator/Desktop/codes/ti_dinho_slack/shared_data:/shared:ro
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:5000/health', timeout=3)"]
       interval: 30s

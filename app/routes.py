@@ -9,16 +9,15 @@ from werkzeug.security import check_password_hash
 from app.services.admin_auth import authenticate_user
 from app.services.email_sender import send_signature_email
 from app.services.employee_importer import build_employee_record, normalize_email, read_employee_rows, validate_employee_row
+from app.services.corporate_employee_store import (
+    equalization_status,
+    find_employee_by_email,
+    list_employees,
+    readiness_summary,
+)
+from app.services.pending_import_store import list_pending_imports, save_pending_import
 from app.services.request_log import append_request_log, recent_request_logs, successful_request_emails
 from app.services.signature_generator import generate_signature_image
-from app.services.workbook_store import (
-    find_employee_by_email,
-    get_employee,
-    list_employees,
-    replace_employee_workbook,
-    replace_employee_workbook_from_upload,
-    save_employee_to_workbook,
-)
 
 
 _LOGIN_ATTEMPTS = {}
@@ -27,7 +26,17 @@ _LOGIN_WINDOW_SECONDS = 15 * 60
 
 
 def _find_employee_by_email(email):
-    return find_employee_by_email(current_app.config["EMPLOYEE_WORKBOOK_PATH"], email)
+    return find_employee_by_email(email)
+
+
+def _base_status():
+    """Centraliza o bloqueio obrigatório antes de qualquer consumo da base."""
+    status = equalization_status()
+    return status if not status["equalized"] else None
+
+
+def _unavailable_response(status, *, code=503):
+    return render_template("home.html", error=status["message"]), code
 
 
 def _log_request(email, status, details=""):
@@ -68,17 +77,6 @@ def _login_is_blocked(key):
     return len(attempts) >= _MAX_LOGIN_ATTEMPTS
 
 
-def _employee_from_form():
-    row = {
-        "nome": request.form.get("full_name", ""),
-        "cargo": request.form.get("job_title", ""),
-        "email": request.form.get("email", ""),
-        "celular": request.form.get("phone", ""),
-        "ativo": "SIM" if request.form.get("active") == "1" else "NÃO",
-    }
-    return build_employee_record(row), validate_employee_row(row)
-
-
 def register_routes(app):
     app.jinja_env.globals["csrf_token"] = _csrf_token
 
@@ -99,8 +97,20 @@ def register_routes(app):
         email = normalize_email(request.form.get("email"))
         if not email:
             return render_template("home.html", error="Informe seu e-mail corporativo.")
+        status = _base_status()
+        if status:
+            return _unavailable_response(status)
         employee = _find_employee_by_email(email)
         if not employee:
+            known_employee = find_employee_by_email(
+                email, active_only=True, require_valid_email=False
+            )
+            if known_employee and not known_employee["email_ready"]:
+                _log_request(email, "email_not_ready", "Colaborador ativo sem e-mail válido")
+                return render_template(
+                    "home.html",
+                    error="Seu cadastro está ativo, mas ainda não possui um e-mail válido para envio. Solicite a regularização à TI.",
+                )
             _log_request(email, "not_found", "Consulta sem registro correspondente")
             return render_template("home.html", error="Nenhum cadastro ativo foi encontrado para esse e-mail.")
         return render_template("confirm.html", employee=employee)
@@ -112,10 +122,14 @@ def register_routes(app):
         email = normalize_email(request.form.get("email"))
         if not email:
             return render_template("home.html", error="E-mail obrigatório.")
+        status = _base_status()
+        if status:
+            return _unavailable_response(status)
         employee = _find_employee_by_email(email)
         if not employee:
             _log_request(email, "not_found_sent", "Tentativa de solicitação sem cadastro")
             return render_template("home.html", error="Não foi possível localizar seu cadastro ativo.")
+        email = employee["email"]
 
         phone = " ".join(request.form.get("phone", "").strip().split())
         if len(phone) > 30:
@@ -124,7 +138,6 @@ def register_routes(app):
         if phone != employee.get("phone", ""):
             updated_employee = dict(employee)
             updated_employee["phone"] = phone
-            save_employee_to_workbook(current_app.config["EMPLOYEE_WORKBOOK_PATH"], updated_employee, original=employee)
             employee = updated_employee
 
         signature_path = None
@@ -178,56 +191,41 @@ def register_routes(app):
     @app.route("/admin")
     @_admin_login_required
     def admin_dashboard():
-        rows = sorted(list_employees(current_app.config["EMPLOYEE_WORKBOOK_PATH"]), key=lambda item: item["full_name"].casefold())
+        status = equalization_status()
+        rows = []
+        summary = {"active": 0, "ready": 0, "missing_email": 0}
+        if status["equalized"]:
+            rows = list_employees(active_only=False)
+            summary = readiness_summary()
         generated_emails = successful_request_emails(current_app.config["REQUEST_LOG_PATH"])
         for employee in rows:
             employee["signature_generated"] = employee["email"] in generated_emails
-        total = len(rows)
-        active = sum(1 for employee in rows if employee["active"])
         logs = recent_request_logs(current_app.config["REQUEST_LOG_PATH"])
-        return render_template("admin_dashboard.html", employees=rows, total=total, active=active, inactive=total - active, request_rows=logs)
+        pending = list_pending_imports(current_app.config["PENDING_IMPORTS_PATH"])
+        return render_template(
+            "admin_dashboard.html",
+            employees=rows,
+            total=len(rows),
+            active=summary["active"],
+            inactive=len(rows) - summary["active"],
+            ready=summary["ready"],
+            missing_email=summary["missing_email"],
+            corporate_status=status,
+            pending_imports=pending,
+            request_rows=logs,
+        )
 
     @app.route("/admin/colaboradores/novo", methods=["GET", "POST"])
     @_admin_login_required
     def admin_employee_new():
-        employee = {"full_name": "", "job_title": "", "email": "", "phone": "", "active": 1}
-        if request.method == "POST":
-            if not _valid_csrf():
-                flash("A sessão expirou. Tente novamente.")
-                return render_template("admin_employee_form.html", employee=employee, is_new=True), 400
-            employee, issues = _employee_from_form()
-            if issues:
-                return render_template("admin_employee_form.html", employee=employee, issues=issues, is_new=True), 400
-            duplicate = find_employee_by_email(current_app.config["EMPLOYEE_WORKBOOK_PATH"], employee["email"], active_only=False)
-            if duplicate:
-                return render_template("admin_employee_form.html", employee=employee, issues={"email": "E-mail já cadastrado."}, is_new=True), 409
-            save_employee_to_workbook(current_app.config["EMPLOYEE_WORKBOOK_PATH"], employee)
-            flash("Colaborador cadastrado e salvo na planilha.")
-            return redirect(url_for("admin_dashboard"))
-        return render_template("admin_employee_form.html", employee=employee, is_new=True)
+        flash("A base corporativa é somente leitura. Cadastros devem ser tratados no projeto de equalização.")
+        return redirect(url_for("admin_dashboard"))
 
     @app.route("/admin/colaboradores/<int:employee_id>/editar", methods=["GET", "POST"])
     @_admin_login_required
     def admin_employee_edit(employee_id):
-        original = get_employee(current_app.config["EMPLOYEE_WORKBOOK_PATH"], employee_id)
-        if not original:
-            flash("Colaborador não encontrado.")
-            return redirect(url_for("admin_dashboard"))
-        employee = original
-        if request.method == "POST":
-            if not _valid_csrf():
-                flash("A sessão expirou. Tente novamente.")
-                return render_template("admin_employee_form.html", employee=employee, is_new=False), 400
-            employee, issues = _employee_from_form()
-            duplicate = find_employee_by_email(current_app.config["EMPLOYEE_WORKBOOK_PATH"], employee["email"], active_only=False)
-            if duplicate and duplicate["id"] != employee_id:
-                issues["email"] = "E-mail já cadastrado."
-            if issues:
-                return render_template("admin_employee_form.html", employee=employee, issues=issues, is_new=False), 400
-            save_employee_to_workbook(current_app.config["EMPLOYEE_WORKBOOK_PATH"], employee, original=original)
-            flash("Dados atualizados na planilha.")
-            return redirect(url_for("admin_dashboard"))
-        return render_template("admin_employee_form.html", employee=employee, is_new=False)
+        flash("A base corporativa é somente leitura. Alterações devem ser tratadas no projeto de equalização.")
+        return redirect(url_for("admin_dashboard"))
 
     @app.route("/admin/import", methods=["GET", "POST"])
     @_admin_login_required
@@ -263,19 +261,20 @@ def register_routes(app):
                 preview.append(record)
             if errors or duplicates:
                 return render_template("admin_import.html", preview=preview, errors=errors, duplicates=duplicates)
-            if uploaded.filename.lower().endswith((".xlsx", ".xlsm")):
-                # Preserve the complete RH workbook and replace the previous base;
-                # rebuilding only selected fields would discard operational columns.
-                result = replace_employee_workbook_from_upload(
-                    current_app.config["EMPLOYEE_WORKBOOK_PATH"], uploaded.stream
-                )
-            else:
-                replace_employee_workbook(current_app.config["EMPLOYEE_WORKBOOK_PATH"], preview)
-                result = None
             filename = Path(uploaded.filename).name
-            message = f"Importação concluída: {filename} — {len(preview)} colaboradores salvos."
-            if result:
-                message += f" Arquivo confirmado: {result['sha256'][:12]}."
+            result = save_pending_import(
+                current_app.config["PENDING_IMPORTS_PATH"],
+                uploaded.stream,
+                filename,
+                uploaded_by=session["admin_user"]["username"],
+                row_count=len(preview),
+            )
+            message = (
+                f"Carga pendente recebida: {filename} — {len(preview)} colaboradores analisados. "
+                f"Arquivo confirmado: {result['sha256'][:12]}. Ela não alterou a base corporativa. "
+                "Solicite à TI que execute a etapa 4 — Analisar Email/SharePoint x RH no projeto de "
+                "equalização e publique a prévia homologada."
+            )
             if without_email:
                 message += f" {without_email} registro(s) ainda estão sem e-mail."
             flash(message)

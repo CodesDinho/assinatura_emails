@@ -3,6 +3,7 @@
     RepositoryPath = '.'
     Remote = 'origin'
     Branch = 'main'
+    ComposePath = 'compose.yaml'
 
     TestCommands = @(
         'python -m pytest -q --basetemp=instance/pytest-$PID -p no:cacheprovider'
@@ -26,6 +27,8 @@
         ApiKeyDotEnvPath = '.env'
         ImageEnvironmentVariable = 'ASSINATURA_EMAILS_IMAGE'
         ImageTemplate = 'ghcr.io/codesdinho/assinatura-emails:sha-{commit}'
+        ContainerName = 'assinatura-emails'
+        RequiredReadOnlyMount = '/shared'
     }
 
     HealthCheck = @{

@@ -103,10 +103,53 @@ function Wait-HealthCheck {
     throw "O servico nao ficou saudavel em $TimeoutSeconds segundos: $Uri"
 }
 
+function Confirm-DeployedContainer {
+    param(
+        [hashtable]$Settings,
+        [string]$ApiKey,
+        [string]$ExpectedImage
+    )
+    $portainer = $Settings.Portainer
+    $base = ([string]$portainer.Url).TrimEnd('/')
+    $containerName = [Uri]::EscapeDataString([string]$portainer.ContainerName)
+    $dockerBase = "$base/api/endpoints/$($portainer.EndpointId)/docker"
+    $container = Invoke-PortainerApi -Method GET -Uri "$dockerBase/containers/$containerName/json" -ApiKey $ApiKey
+
+    if (-not $container.State.Running) {
+        throw "Container '$($portainer.ContainerName)' não está em execução."
+    }
+    if ($container.State.Health -and $container.State.Health.Status -ne 'healthy') {
+        throw "Container '$($portainer.ContainerName)' com health '$($container.State.Health.Status)'."
+    }
+    if ([string]$container.Config.Image -ne $ExpectedImage) {
+        throw "Imagem ativa '$($container.Config.Image)' difere da esperada '$ExpectedImage'."
+    }
+
+    $requiredMount = [string]$portainer.RequiredReadOnlyMount
+    if ($requiredMount) {
+        $mount = $container.Mounts | Where-Object { $_.Destination -eq $requiredMount } | Select-Object -First 1
+        if (-not $mount) {
+            throw "Mount obrigatório '$requiredMount' não encontrado no container."
+        }
+        if ($mount.RW) {
+            throw "Mount '$requiredMount' está gravável; esperado somente leitura."
+        }
+        Write-Host "Mount confirmado: $($mount.Source):$requiredMount (somente leitura)"
+    }
+
+    $logsUri = "$dockerBase/containers/$containerName/logs?stdout=true&stderr=true&tail=100&timestamps=true"
+    $logs = Invoke-WebRequest -Method Get -Uri $logsUri -Headers @{ 'X-API-Key' = $ApiKey } -UseBasicParsing
+    if ($logs.StatusCode -ne 200) {
+        throw "Não foi possível consultar os logs do container '$($portainer.ContainerName)'."
+    }
+    Write-Host "Container, imagem e logs confirmados: $($portainer.ContainerName)"
+}
+
 $configPath = (Resolve-Path -LiteralPath $Config).Path
 $settings = Import-PowerShellDataFile -LiteralPath $configPath
 $configDirectory = Split-Path -Parent $configPath
 $repositoryPath = [IO.Path]::GetFullPath((Join-Path $configDirectory $settings.RepositoryPath))
+$composePath = [IO.Path]::GetFullPath((Join-Path $repositoryPath $settings.ComposePath))
 Push-Location $repositoryPath
 try {
     Invoke-Native git @('rev-parse', '--is-inside-work-tree')
@@ -127,7 +170,10 @@ try {
         Invoke-Native git @('add', '--all')
         $staged = & git diff --cached --name-only
         if ($LASTEXITCODE -ne 0) { throw 'Nao foi possivel inspecionar os arquivos preparados.' }
-        $blocked = @($staged | Where-Object { $_ -match '(^|/)(\.env($|\.)|.*\.(pfx|p12|pem|key)$)' })
+        $blocked = @($staged | Where-Object {
+            $_ -notmatch '(?i)(^|/)\.env\.example$' -and
+            $_ -match '(?i)(^|/)(\.env($|\.)|.*\.(pfx|p12|pem|key|xlsx|xlsm|csv|sqlite|sqlite3|db)$|uploads?(/|$)|backups?(/|$)|reports?(/|$)|relatorios?(/|$)|credentials?(/|$))'
+        })
         if ($blocked.Count -gt 0) {
             & git reset -- @blocked
             if ($LASTEXITCODE -ne 0) { throw 'Falha ao remover arquivos sensiveis do stage.' }
@@ -145,6 +191,9 @@ try {
     if ($LASTEXITCODE -ne 0) { throw 'Nao foi possivel obter o commit atual.' }
 
     if (-not $SkipDeploy) {
+        if (-not (Test-Path -LiteralPath $composePath -PathType Leaf)) {
+            throw "Compose versionado não encontrado: $composePath"
+        }
         Wait-GitHubActions -Settings $settings.GitHubActions -Commit $commit
 
         $portainer = $settings.Portainer
@@ -163,7 +212,6 @@ try {
         if ([int]$stack.EndpointId -ne [int]$portainer.EndpointId) {
             throw "A stack esta no endpoint $($stack.EndpointId), nao no endpoint configurado $($portainer.EndpointId)."
         }
-        $stackFile = Invoke-PortainerApi -Method GET -Uri "$stackUri/file" -ApiKey $apiKey
         $image = ([string]$portainer.ImageTemplate).Replace('{commit}', $commit)
         $imageVariable = $stack.Env | Where-Object { $_.name -eq $portainer.ImageEnvironmentVariable } | Select-Object -First 1
         if (-not $imageVariable) {
@@ -174,13 +222,14 @@ try {
             env              = @($stack.Env)
             prune            = $true
             pullImage        = $true
-            stackFileContent = $stackFile.StackFileContent
+            stackFileContent = Get-Content -Raw -LiteralPath $composePath
         }
         if ($PSCmdlet.ShouldProcess($stack.Name, "publicar $image")) {
             Invoke-PortainerApi -Method PUT -Uri "${stackUri}?endpointId=$($portainer.EndpointId)" -ApiKey $apiKey -Body $payload | Out-Null
             Write-Host "Stack '$($stack.Name)' atualizada para $image"
         }
         Wait-HealthCheck -Uri $settings.HealthCheck.Url -TimeoutSeconds ([int]$settings.HealthCheck.TimeoutSeconds)
+        Confirm-DeployedContainer -Settings $settings -ApiKey $apiKey -ExpectedImage $image
     }
 
     Write-Host "Concluido no commit $commit"

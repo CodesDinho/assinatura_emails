@@ -9,8 +9,8 @@ Automatiza o fluxo operacional de aplicações mantidas em Git e publicadas pelo
 3. envia a branch ao repositório remoto;
 4. aguarda o workflow do GitHub Actions concluir;
 5. atualiza a imagem configurada na stack do Portainer;
-6. solicita `pull` da imagem e recria somente os serviços necessários;
-7. confirma o endpoint de saúde da aplicação.
+6. publica o `compose.yaml` versionado, solicita `pull` da imagem e recria somente os serviços necessários;
+7. confirma o endpoint de saúde, a imagem ativa, o estado do container, mounts obrigatórios e acesso aos logs.
 
 O processo não depende do Codex. A chave do Portainer e tokens nunca devem ser salvos no arquivo de configuração versionado.
 
@@ -50,6 +50,7 @@ Depois ajuste em `deploy.config.psd1`:
 |---|---|
 | `RepositoryPath` | raiz do Git, relativa ao arquivo de configuração |
 | `Remote` / `Branch` | `git remote -v` e branch de produção |
+| `ComposePath` | arquivo Compose versionado que será enviado ao Portainer |
 | `TestCommands` | comandos de teste obrigatórios do projeto |
 | `GitHubActions.Repository` | organização e repositório no GitHub |
 | `GitHubActions.Workflow` | nome ou arquivo do workflow que publica a imagem |
@@ -58,6 +59,8 @@ Depois ajuste em `deploy.config.psd1`:
 | `Portainer.StackId` | ID da stack, obtido no Portainer/API |
 | `ImageEnvironmentVariable` | variável da stack que contém a imagem imutável |
 | `ImageTemplate` | imagem com `{commit}` no lugar do SHA |
+| `ContainerName` | nome do container validado após o deploy |
+| `RequiredReadOnlyMount` | destino que deve existir como mount somente leitura |
 | `HealthCheck.Url` | endpoint HTTP que retorna sucesso após o deploy |
 
 Configure a credencial apenas na máquina de execução:
@@ -100,6 +103,10 @@ O pipeline deve publicar exatamente esse padrão de tag. Tags imutáveis por SHA
 - Volumes persistentes não são removidos pelo deploy.
 - Para reverter, execute novamente com o commit desejado ajustando temporariamente `ImageTemplate`, ou restaure a imagem anterior diretamente na stack.
 
-## Dados persistentes
+## Dados persistentes e base corporativa
 
-Arquivos operacionais montados em volumes, como `colaboradores_ativos_2409.xlsx`, não fazem parte da imagem nem do Git. Eles devem ser atualizados separadamente, com backup, validação de integridade e preservação de proprietário/permissões. Um deploy do container não substitui esses dados.
+O SQLite corporativo não faz parte da imagem nem do Git. Ele é montado do host em `/shared:ro` e deve ser publicado pelo projeto de equalização. Antes do deploy, confirme uma publicação `PUBLICADO` em `rh_importacoes` e a view `rh_assinaturas_colaboradores`.
+
+Uploads feitos nesta aplicação ficam em `/app/data/pending_imports` e não alteram a base publicada. Após um upload, a TI deve executar a etapa 4 — Analisar Email/SharePoint x RH — no projeto de equalização, homologar a prévia e publicá-la. A planilha legada permanece apenas para rollback controlado.
+
+Após atualizar a stack, valide o endpoint `/health`, o estado do container, o mount `/shared:ro` e os logs. Um `503` com aviso de equalização ou indisponibilidade deve interromper a entrega; não habilite fallback automático para XLSX.

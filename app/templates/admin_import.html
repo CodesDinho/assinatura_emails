@@ -1,14 +1,16 @@
 {% extends 'base.html' %}
-{% block title %}Importação{% endblock %}
+{% block title %}Carga pendente{% endblock %}
 {% block content %}
 <section class="card">
-  <h1>Importação de base</h1>
+  <h1>Enviar carga pendente de colaboradores</h1>
+  <p>O arquivo será validado e armazenado como pendência. Ele não atualizará a base corporativa.</p>
+  <p>Depois, solicite à TI a etapa 4 — Analisar Email/SharePoint x RH — no projeto de equalização e a publicação da prévia homologada.</p>
   <form id="import-form" method="post" enctype="multipart/form-data">
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
     <label for="file">Arquivo CSV/XLSX</label>
     <input id="file" name="file" type="file" accept=".csv,.xlsx,.xlsm" required>
     <p id="selected-file" class="field-help">Nenhum arquivo selecionado.</p>
-    <button id="import-button" type="submit">Importar e substituir toda a base</button>
+    <button id="import-button" type="submit">Validar e registrar como pendente</button>
   </form>
 
   {% if preview %}
@@ -40,7 +42,7 @@
   });
   form.addEventListener('submit', () => {
     button.disabled = true;
-    button.textContent = 'Importando...';
+    button.textContent = 'Registrando...';
   });
 })();
 </script>
