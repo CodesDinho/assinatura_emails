@@ -13,6 +13,7 @@ from app.services.corporate_employee_store import (
     equalization_status,
     find_employee_by_email,
     list_employees,
+    lorac_coverage,
     readiness_summary,
 )
 from app.services.pending_import_store import list_pending_imports, save_pending_import
@@ -194,9 +195,11 @@ def register_routes(app):
         status = equalization_status()
         rows = []
         summary = {"active": 0, "ready": 0, "missing_email": 0}
+        lorac = {"total": 0, "ready": 0, "pending": [], "pending_count": 0, "coverage_percent": 100.0}
         if status["equalized"]:
             rows = list_employees(active_only=False)
             summary = readiness_summary()
+            lorac = lorac_coverage()
         generated_emails = successful_request_emails(current_app.config["REQUEST_LOG_PATH"])
         for employee in rows:
             employee["signature_generated"] = employee["email"] in generated_emails
@@ -211,6 +214,7 @@ def register_routes(app):
             ready=summary["ready"],
             missing_email=summary["missing_email"],
             corporate_status=status,
+            lorac_coverage=lorac,
             pending_imports=pending,
             request_rows=logs,
         )

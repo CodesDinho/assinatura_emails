@@ -23,6 +23,19 @@
     <p class="error">{{ corporate_status['message'] }}</p>
   {% endif %}
 
+  <h2>Cobertura Lorac</h2>
+  <p>{{ lorac_coverage['ready'] }} de {{ lorac_coverage['total'] }} colaboradores ativos com identidade Lorac ativa possuem e-mail corporativo validado ({{ lorac_coverage['coverage_percent'] }}%).</p>
+  {% if lorac_coverage['pending'] %}
+    <p class="error">A publicação possui {{ lorac_coverage['pending_count'] }} pendência(s) e ainda não atingiu 100% de cobertura.</p>
+    <ul>
+      {% for item in lorac_coverage['pending'] %}
+        <li>{{ item['full_name'] }} — {{ item['job_title'] }} — Lorac: {{ item['lorac_upn'] }} — sem e-mail corporativo validado</li>
+      {% endfor %}
+    </ul>
+  {% else %}
+    <p>Todos os colaboradores ativos com identidade Lorac ativa possuem e-mail corporativo validado.</p>
+  {% endif %}
+
   <h2>Cargas pendentes</h2>
   <p>Esses arquivos não alteram a base publicada. Solicite à TI a etapa 4 — Analisar Email/SharePoint x RH — e a publicação da prévia homologada.</p>
   <ul>
@@ -46,7 +59,7 @@
     <tbody>
     {% for employee in employees %}
       <tr>
-        <td>{{ employee['full_name'] }}</td><td>{{ employee['job_title'] }}</td><td>{{ employee['email'] }}</td><td>{{ employee['phone'] or '—' }}</td>
+        <td>{{ employee['full_name'] }}</td><td>{{ employee['job_title'] }}</td><td>{{ employee['email'] }}{% if employee['duplicate_email'] %} <span class="error">(duplicado — bloqueado)</span>{% endif %}</td><td>{{ employee['phone'] or '—' }}</td>
         <td>{{ 'Ativo' if employee['active'] else 'Inativo' }}</td>
         <td data-sort-value="{{ 1 if employee['signature_generated'] else 0 }}"><span class="signature-state {{ 'generated' if employee['signature_generated'] else 'pending' }}">{{ 'Sim' if employee['signature_generated'] else 'Não' }}</span></td>
       </tr>

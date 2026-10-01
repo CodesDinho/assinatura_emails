@@ -23,7 +23,7 @@ def _corporate_database(path, *, published=True):
         CREATE TABLE people (
             id INTEGER PRIMARY KEY, nome TEXT, cargo TEXT, email TEXT, celular TEXT,
             ativo TEXT, ativo_rh INTEGER, email_valido INTEGER, status_validacao TEXT,
-            mat TEXT, razao_social TEXT
+            mat TEXT, razao_social TEXT, sharepoint_upn TEXT, sharepoint_ativo INTEGER
         );
         CREATE TABLE rh_importacoes (
             id INTEGER PRIMARY KEY, source_hash TEXT, arquivo_origem TEXT,
@@ -33,11 +33,11 @@ def _corporate_database(path, *, published=True):
         CREATE VIEW rh_assinaturas_colaboradores AS SELECT * FROM people;
     """)
     connection.executemany(
-        "INSERT INTO people VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        "INSERT INTO people VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
         [
-            (1, "Maria Teste", "Analista", "maria@empresa.com", "1111", "SIM", 1, 1, "APTO", "1", "Empresa"),
-            (2, "Pessoa Inativa", "Gestor", "inativa@empresa.com", "", "NÃO", 0, 1, "INATIVO", "2", "Empresa"),
-            (3, "Sem E-mail Válido", "Operador", "pendente@empresa.com", "", "SIM", 1, 0, "SEM_EMAIL", "3", "Empresa"),
+            (1, "Maria Teste", "Analista", "maria@empresa.com", "1111", "SIM", 1, 1, "APTO", "1", "Empresa", "maria@lorac.test", 1),
+            (2, "Pessoa Inativa", "Gestor", "inativa@empresa.com", "", "NÃO", 0, 1, "INATIVO", "2", "Empresa", "", 0),
+            (3, "Sem E-mail Válido", "Operador", "pendente@empresa.com", "", "SIM", 1, 0, "SEM_EMAIL", "3", "Empresa", "pendente@lorac.test", 1),
         ],
     )
     if published:
@@ -156,6 +156,21 @@ def test_missing_publication_shows_exact_equalization_warning(tmp_path):
         "A base de dados ainda não está equalizada. Solicite à TI que execute a rotina no projeto de "
         "equalização de usuários, sistemas e equipamentos."
     ) in response.text
+
+
+def test_duplicate_active_email_is_blocked_for_every_employee(tmp_path):
+    database_path = _corporate_database(tmp_path / "corporate.db")
+    with sqlite3.connect(database_path) as connection:
+        connection.execute(
+            "INSERT INTO people VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            (4, "Outra Pessoa", "Gestor", "maria@empresa.com", "", "SIM", 1, 1, "APTO", "4", "Empresa", "outra@lorac.test", 1),
+        )
+    app = create_app(test_config={"TESTING": True, "SHARED_SQLITE_PATH": str(database_path)})
+
+    with app.test_client() as client:
+        response = client.post("/consultar", data={"email": "maria@empresa.com"})
+
+    assert "Nenhum cadastro ativo" in response.text
 
 
 def test_unavailable_database_does_not_fall_back_to_legacy_workbook(tmp_path):
@@ -422,6 +437,9 @@ def test_admin_dashboard_marks_generated_signature_and_has_sortable_headers(tmp_
         assert 'data-column="0"' in dashboard.text
         assert "Assinatura gerada" in dashboard.text
         assert 'class="signature-state generated">Sim' in dashboard.text
+        assert "Cobertura Lorac" in dashboard.text
+        assert "1 de 2" in dashboard.text
+        assert "Sem E-mail Válido" in dashboard.text
 
 
 def test_merge_emails_matches_normalized_names_without_overwriting(tmp_path):
