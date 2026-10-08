@@ -104,6 +104,8 @@ th, td { padding: 10px; border-bottom: 1px solid #e3e7ed; text-align: left; vert
 .signature-state { display: inline-block; min-width: 38px; padding: 4px 8px; border-radius: 999px; text-align: center; font-size: 0.82rem; font-weight: bold; }
 .signature-state.generated { background: #d9f5e7; color: #146c43; }
 .signature-state.pending { background: #eef1f5; color: #596575; }
+.override-state { display: inline-block; margin-left: 5px; padding: 2px 6px; border-radius: 999px; background: #fff1cc; color: #765500; font-size: 0.72rem; font-weight: bold; }
+.table-action { display: inline-block; padding: 6px 10px; border: 1px solid #154c8c; border-radius: 6px; font-weight: bold; white-space: nowrap; }
 .field-help { display: block; margin: -8px 0 14px; color: #596575; }
 .field-error { margin: -8px 0 14px; color: #8e1d1d; font-weight: bold; }
 .checkbox-label { display: flex; align-items: center; gap: 8px; margin-bottom: 16px; }

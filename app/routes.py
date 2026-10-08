@@ -8,14 +8,22 @@ from werkzeug.security import check_password_hash
 
 from app.services.admin_auth import authenticate_user
 from app.services.email_sender import send_signature_email
-from app.services.employee_importer import build_employee_record, normalize_email, read_employee_rows, validate_employee_row
+from app.services.employee_importer import (
+    build_employee_record,
+    normalize_email,
+    normalize_text,
+    read_employee_rows,
+    validate_employee_row,
+)
 from app.services.corporate_employee_store import (
     equalization_status,
     find_employee_by_email,
+    find_employee_by_id,
     list_employees,
     lorac_coverage,
     readiness_summary,
 )
+from app.services.employee_override_store import save_employee_override
 from app.services.pending_import_store import list_pending_imports, save_pending_import
 from app.services.request_log import append_request_log, recent_request_logs, successful_request_emails
 from app.services.signature_generator import generate_signature_image
@@ -107,6 +115,15 @@ def register_routes(app):
             known_employee = find_employee_by_email(
                 email, active_only=True, require_valid_email=False
             )
+            if known_employee and known_employee.get("duplicate_email"):
+                _log_request(email, "duplicate_email", "E-mail vinculado a mais de um colaborador ativo")
+                return render_template(
+                    "home.html",
+                    error=(
+                        "Este e-mail está vinculado a mais de um colaborador ativo. "
+                        "Por segurança, a geração foi bloqueada. Solicite ao RH a correção dos cadastros."
+                    ),
+                )
             if known_employee and not known_employee["email_ready"]:
                 _log_request(email, "email_not_ready", "Colaborador ativo sem e-mail válido")
                 return render_template(
@@ -257,7 +274,58 @@ def register_routes(app):
     @app.route("/admin/colaboradores/<int:employee_id>/editar", methods=["GET", "POST"])
     @_admin_login_required
     def admin_employee_edit(employee_id):
-        flash("A base corporativa é somente leitura. Alterações devem ser tratadas no projeto de equalização.")
+        status = equalization_status()
+        if not status["equalized"]:
+            flash(status["message"])
+            return redirect(url_for("admin_dashboard"))
+        employee = find_employee_by_id(employee_id)
+        if not employee:
+            flash("Colaborador não encontrado na publicação corporativa atual.")
+            return redirect(url_for("admin_dashboard"))
+        if request.method == "GET":
+            return render_template("admin_employee_form.html", employee=employee, is_new=False)
+        if not _valid_csrf():
+            flash("A sessão expirou. Tente novamente.")
+            return render_template("admin_employee_form.html", employee=employee, is_new=False), 400
+
+        edited = {
+            **employee,
+            "full_name": normalize_text(request.form.get("full_name")),
+            "job_title": normalize_text(request.form.get("job_title")),
+            "email": normalize_email(request.form.get("email")),
+            "phone": normalize_text(request.form.get("phone")),
+            "registration": normalize_text(request.form.get("registration")),
+            "company": normalize_text(request.form.get("company")),
+            "active": request.form.get("active") == "1",
+        }
+        issues = validate_employee_row(edited, require_email=False)
+        if len(edited["phone"]) > 30:
+            issues["phone"] = "Informe um celular com até 30 caracteres."
+        if edited["email"] and edited["active"]:
+            conflict = next(
+                (
+                    item for item in list_employees(active_only=True)
+                    if item["id"] != employee_id and item["email"] == edited["email"]
+                ),
+                None,
+            )
+            if conflict:
+                issues["email"] = (
+                    f"Este e-mail já está vinculado ao colaborador {conflict['full_name']}. "
+                    "Remova-o desse cadastro antes de atribuí-lo aqui."
+                )
+        if issues:
+            return render_template(
+                "admin_employee_form.html", employee=edited, issues=issues, is_new=False
+            ), 400
+
+        save_employee_override(
+            employee_id,
+            employee,
+            edited,
+            session["admin_user"]["username"],
+        )
+        flash(f"Dados de {edited['full_name']} atualizados com segurança.")
         return redirect(url_for("admin_dashboard"))
 
     @app.route("/admin/import", methods=["GET", "POST"])

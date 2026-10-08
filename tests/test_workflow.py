@@ -194,7 +194,8 @@ def test_duplicate_active_email_is_blocked_for_every_employee(tmp_path):
     with app.test_client() as client:
         response = client.post("/consultar", data={"email": "maria@empresa.com"})
 
-    assert "Nenhum cadastro ativo" in response.text
+    assert "vinculado a mais de um colaborador ativo" in response.text
+    assert "Solicite ao RH a correção dos cadastros" in response.text
 
 
 def test_unavailable_database_does_not_fall_back_to_legacy_workbook(tmp_path):
@@ -486,6 +487,56 @@ def test_admin_dashboard_marks_generated_signature_and_has_sortable_headers(tmp_
         assert "Cobertura Lorac" in dashboard.text
         assert "1 de 2" in dashboard.text
         assert "Sem E-mail Válido" in dashboard.text
+
+
+def test_admin_can_remove_wrong_duplicate_email_without_changing_corporate_database(tmp_path):
+    database_path = _corporate_database(tmp_path / "corporate.db")
+    with sqlite3.connect(database_path) as connection:
+        connection.execute(
+            "INSERT INTO people VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            (4, "Roberson Souza", "Coordenador de T.I.", "maria@empresa.com", "2222", "SIM", 1, 1, "APTO", "4", "Empresa", "roberson@lorac.test", 1),
+        )
+    corporate_before = database_path.read_bytes()
+    overrides_path = tmp_path / "employee_overrides.db"
+    users_path = Path(__file__).resolve().parent.parent / "config" / "users.json"
+    app = create_app(test_config={
+        "TESTING": True,
+        "SECRET_KEY": "test-secret",
+        "SHARED_SQLITE_PATH": str(database_path),
+        "EMPLOYEE_OVERRIDES_PATH": str(overrides_path),
+        "ADMIN_USERS_PATH": str(users_path),
+        "REQUEST_LOG_PATH": str(tmp_path / "requests.jsonl"),
+    })
+
+    with app.test_client() as client:
+        blocked = client.post("/consultar", data={"email": "maria@empresa.com"})
+        assert "vinculado a mais de um colaborador ativo" in blocked.text
+
+        login_page = client.get("/admin/login")
+        token = login_page.text.split('name="csrf_token" value="', 1)[1].split('"', 1)[0]
+        client.post("/admin/login", data={"username": "rh", "password": "rh", "csrf_token": token})
+        edit_page = client.get("/admin/colaboradores/1/editar")
+        assert edit_page.status_code == 200
+        token = edit_page.text.split('name="csrf_token" value="', 1)[1].split('"', 1)[0]
+        saved = client.post("/admin/colaboradores/1/editar", data={
+            "csrf_token": token,
+            "full_name": "Maria Teste",
+            "job_title": "Analista",
+            "email": "",
+            "phone": "1111",
+            "registration": "1",
+            "company": "Empresa",
+            "active": "1",
+        }, follow_redirects=True)
+        assert saved.status_code == 200
+        assert "atualizados com segurança" in saved.text
+        assert "corrigido" in saved.text
+
+        available = client.post("/consultar", data={"email": "maria@empresa.com"})
+        assert "Roberson Souza" in available.text
+
+    assert overrides_path.exists()
+    assert database_path.read_bytes() == corporate_before
 
 
 def test_merge_emails_matches_normalized_names_without_overwriting(tmp_path):

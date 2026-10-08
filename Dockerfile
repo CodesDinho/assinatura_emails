@@ -7,6 +7,7 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     PENDING_IMPORTS_PATH=/app/data/pending_imports \
     REQUEST_LOG_PATH=/app/instance/request_logs.jsonl \
     GENERATED_FILES_PATH=/app/instance/generated \
+    EMPLOYEE_OVERRIDES_PATH=/app/instance/employee_overrides.db \
     ADMIN_USERS_PATH=/app/config/users.json
 
 WORKDIR /app

@@ -25,6 +25,8 @@ A stack monta `/home/administrator/Desktop/codes/ti_dinho_slack/shared_data` em 
 
 O upload administrativo apenas valida e guarda o arquivo em `/app/data/pending_imports`; ele não grava no SQLite nem altera vínculos publicados. Para efetivar uma carga, solicite à TI a etapa 4 — Analisar Email/SharePoint x RH — no projeto de equalização e a publicação da prévia homologada. A variável `EMPLOYEE_WORKBOOK_PATH` existe somente para rollback controlado e não participa do fluxo normal.
 
+Correções feitas em **Editar** na área administrativa são gravadas em `/app/instance/employee_overrides.db` e aplicadas sobre a publicação somente para este sistema. O banco corporativo permanece intacto; a origem também deve ser corrigida pelo RH para que futuras publicações tragam o dado correto.
+
 Para produção com HTTPS, configure `SESSION_COOKIE_SECURE=true`. Não versione `.env`, arquivos Excel nem PowerPoint.
 
 ## Testes

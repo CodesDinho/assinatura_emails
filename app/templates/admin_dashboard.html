@@ -55,16 +55,18 @@
       <th><button class="sort-button" type="button" data-column="3">Celular <span aria-hidden="true">↕</span></button></th>
       <th><button class="sort-button" type="button" data-column="4">Status <span aria-hidden="true">↕</span></button></th>
       <th><button class="sort-button" type="button" data-column="5">Assinatura gerada <span aria-hidden="true">↕</span></button></th>
+      <th>Ações</th>
     </tr></thead>
     <tbody>
     {% for employee in employees %}
       <tr>
-        <td>{{ employee['full_name'] }}</td><td>{{ employee['job_title'] }}</td><td>{{ employee['email'] }}{% if employee['duplicate_email'] %} <span class="error">(duplicado — bloqueado)</span>{% endif %}</td><td>{{ employee['phone'] or '—' }}</td>
+        <td>{{ employee['full_name'] }}{% if employee['overridden'] %} <span class="override-state" title="Corrigido por {{ employee['override_updated_by'] }} em {{ employee['override_updated_at'] }}">corrigido</span>{% endif %}</td><td>{{ employee['job_title'] }}</td><td>{{ employee['email'] or '—' }}{% if employee['duplicate_email'] %} <span class="error">(duplicado — bloqueado)</span>{% endif %}</td><td>{{ employee['phone'] or '—' }}</td>
         <td>{{ 'Ativo' if employee['active'] else 'Inativo' }}</td>
         <td data-sort-value="{{ 1 if employee['signature_generated'] else 0 }}"><span class="signature-state {{ 'generated' if employee['signature_generated'] else 'pending' }}">{{ 'Sim' if employee['signature_generated'] else 'Não' }}</span></td>
+        <td><a class="table-action" href="{{ url_for('admin_employee_edit', employee_id=employee['id']) }}">Editar</a></td>
       </tr>
     {% else %}
-      <tr><td colspan="6">Nenhum colaborador disponível.</td></tr>
+      <tr><td colspan="7">Nenhum colaborador disponível.</td></tr>
     {% endfor %}
     </tbody>
   </table></div>

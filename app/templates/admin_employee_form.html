@@ -3,7 +3,7 @@
 {% block content %}
 <section class="card">
   <h1>{{ 'Novo colaborador' if is_new else 'Editar colaborador' }}</h1>
-  <p>A base corporativa é somente leitura. Alterações permanentes devem ser tratadas no projeto de equalização.</p>
+  <p>A correção é aplicada sobre a publicação corporativa sem alterar o banco homologado. Campos em branco, como e-mail e celular, removem o valor incorreto deste sistema. Solicite também ao RH a correção na origem.</p>
   {% if issues %}<div class="alert error">{% for field, message in issues.items() %}<div>{{ message }}</div>{% endfor %}</div>{% endif %}
   <form method="post">
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
@@ -12,9 +12,14 @@
     <label for="job_title">Cargo</label>
     <input id="job_title" name="job_title" required value="{{ employee['job_title'] }}">
     <label for="email">E-mail</label>
-    <input id="email" name="email" type="email" required value="{{ employee['email'] }}">
+    <input id="email" name="email" type="email" value="{{ employee['email'] }}">
+    <small class="field-help">Para liberar um e-mail atribuído à pessoa errada, apague este campo e salve. Depois edite a pessoa correta.</small>
     <label for="phone">Número de celular</label>
     <input id="phone" name="phone" type="tel" value="{{ employee['phone'] or '' }}" placeholder="+55 41 99999-9999">
+    <label for="registration">Matrícula</label>
+    <input id="registration" name="registration" value="{{ employee['registration'] or '' }}">
+    <label for="company">Empresa</label>
+    <input id="company" name="company" value="{{ employee['company'] or '' }}">
     <label class="checkbox-label"><input name="active" type="checkbox" value="1" {% if employee['active'] %}checked{% endif %}> Cadastro ativo</label>
     <button type="submit">Salvar</button>
   </form>

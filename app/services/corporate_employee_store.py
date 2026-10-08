@@ -6,6 +6,9 @@ import os
 from pathlib import Path
 import sqlite3
 
+from app.services.employee_importer import EMAIL_PATTERN
+from app.services.employee_override_store import load_employee_overrides
+
 
 DEFAULT_DATABASE_PATH = Path("/shared/slack_apps.db")
 NOT_EQUALIZED_MESSAGE = (
@@ -82,42 +85,94 @@ def equalization_status() -> dict:
 
 
 def _employee(row: sqlite3.Row) -> dict:
-    duplicate_email = "duplicate_email" in row.keys() and bool(row["duplicate_email"])
     return {
         "id": row["id"],
         "full_name": row["nome"],
         "job_title": row["cargo"] or "",
         "email": (row["email"] or "").strip().lower(),
         "phone": row["celular"] or "",
-        "active": row["ativo"] == "SIM",
-        "email_ready": bool(row["email_valido"]) and not duplicate_email,
-        "duplicate_email": duplicate_email,
+        "active": bool(row["ativo_rh"]),
+        "email_ready": bool(row["email_valido"]),
+        "duplicate_email": False,
         "status_validation": row["status_validacao"],
-        "registration": row["mat"],
-        "company": row["razao_social"],
+        "registration": str(row["mat"] or ""),
+        "company": row["razao_social"] or "",
+        "lorac_upn": row["sharepoint_upn"] or "",
+        "sharepoint_active": bool(row["sharepoint_ativo"]),
+        "overridden": False,
+        "override_updated_by": "",
+        "override_updated_at": "",
+        "source_registration": str(row["mat"] or ""),
+        "source_name": row["nome"],
     }
 
 
-def list_employees(*, active_only: bool = True) -> list[dict]:
-    where = "WHERE ativo_rh=1" if active_only else ""
+def _base_employees() -> list[dict]:
     with _connection() as connection:
         rows = connection.execute(
-            f"""
+            """
             SELECT employee.id, employee.nome, employee.cargo, employee.email,
                    employee.celular, employee.ativo, employee.email_valido,
                    employee.status_validacao, employee.mat, employee.razao_social,
-                   CASE WHEN trim(COALESCE(employee.email, '')) <> '' AND EXISTS (
-                       SELECT 1 FROM rh_assinaturas_colaboradores duplicate
-                       WHERE duplicate.id <> employee.id AND duplicate.ativo_rh=1
-                         AND duplicate.email_valido=1
-                         AND lower(trim(duplicate.email))=lower(trim(employee.email))
-                   ) THEN 1 ELSE 0 END AS duplicate_email
+                   employee.ativo_rh, employee.sharepoint_upn, employee.sharepoint_ativo
             FROM rh_assinaturas_colaboradores employee
-            {where}
             ORDER BY employee.nome COLLATE NOCASE
             """
         ).fetchall()
     return [_employee(row) for row in rows]
+
+
+def _override_matches_source(employee: dict, override: dict) -> bool:
+    stored_registration = str(override.get("source_registration") or "").strip()
+    if stored_registration:
+        return stored_registration == employee["source_registration"]
+    return str(override.get("source_name") or "").strip().casefold() == employee["source_name"].strip().casefold()
+
+
+def _merged_employees() -> list[dict]:
+    employees = _base_employees()
+    overrides = load_employee_overrides()
+    for employee in employees:
+        override = overrides.get(employee["id"])
+        if not override or not _override_matches_source(employee, override):
+            continue
+        employee.update(
+            full_name=override["full_name"],
+            job_title=override["job_title"],
+            email=(override["email"] or "").strip().lower(),
+            phone=override["phone"] or "",
+            active=bool(override["active"]),
+            registration=override["registration"] or "",
+            company=override["company"] or "",
+            status_validation="CORREÇÃO ADMINISTRATIVA",
+            overridden=True,
+            override_updated_by=override["updated_by"],
+            override_updated_at=override["updated_at"],
+        )
+        employee["email_ready"] = bool(EMAIL_PATTERN.fullmatch(employee["email"]))
+
+    active_email_counts = {}
+    for employee in employees:
+        if employee["active"] and employee["email"] and employee["email_ready"]:
+            active_email_counts[employee["email"]] = active_email_counts.get(employee["email"], 0) + 1
+    for employee in employees:
+        employee["duplicate_email"] = (
+            employee["active"] and active_email_counts.get(employee["email"], 0) > 1
+        )
+        if employee["duplicate_email"]:
+            employee["email_ready"] = False
+    return employees
+
+
+def list_employees(*, active_only: bool = True) -> list[dict]:
+    employees = _merged_employees()
+    if active_only:
+        employees = [employee for employee in employees if employee["active"]]
+    return sorted(employees, key=lambda employee: employee["full_name"].casefold())
+
+
+def find_employee_by_id(employee_id: int) -> dict | None:
+    return next((employee for employee in _merged_employees() if employee["id"] == employee_id), None)
 
 
 def find_employee_by_email(
@@ -126,84 +181,39 @@ def find_employee_by_email(
     normalized = str(email or "").strip().lower()
     if not normalized:
         return None
-    clauses = ["lower(trim(employee.email))=?"]
+    matches = [employee for employee in _merged_employees() if employee["email"] == normalized]
     if active_only:
-        clauses.append("employee.ativo_rh=1")
+        matches = [employee for employee in matches if employee["active"]]
     if require_valid_email:
-        clauses.append("employee.email_valido=1")
-    with _connection() as connection:
-        row = connection.execute(
-            f"""
-            SELECT employee.id, employee.nome, employee.cargo, employee.email,
-                   employee.celular, employee.ativo, employee.email_valido,
-                   employee.status_validacao, employee.mat, employee.razao_social,
-                   0 AS duplicate_email
-            FROM rh_assinaturas_colaboradores employee
-            WHERE {' AND '.join(clauses)}
-              AND NOT EXISTS (
-                  SELECT 1 FROM rh_assinaturas_colaboradores duplicate
-                  WHERE duplicate.id <> employee.id AND duplicate.ativo_rh=1
-                    AND duplicate.email_valido=1
-                    AND lower(trim(duplicate.email))=lower(trim(employee.email))
-              )
-            ORDER BY ativo_rh DESC, id
-            LIMIT 1
-            """,
-            (normalized,),
-        ).fetchone()
-    return _employee(row) if row is not None else None
+        matches = [employee for employee in matches if employee["email_ready"]]
+    return sorted(matches, key=lambda employee: (not employee["active"], employee["id"]))[0] if matches else None
 
 
 def readiness_summary() -> dict:
-    with _connection() as connection:
-        row = connection.execute(
-            """
-            SELECT
-                SUM(CASE WHEN ativo_rh=1 THEN 1 ELSE 0 END) AS active,
-                SUM(CASE WHEN employee.ativo_rh=1 AND employee.email_valido=1 AND NOT EXISTS (
-                    SELECT 1 FROM rh_assinaturas_colaboradores duplicate
-                    WHERE duplicate.id <> employee.id AND duplicate.ativo_rh=1
-                      AND duplicate.email_valido=1
-                      AND lower(trim(duplicate.email))=lower(trim(employee.email))
-                ) THEN 1 ELSE 0 END) AS ready,
-                SUM(CASE WHEN employee.ativo_rh=1 AND (COALESCE(employee.email_valido, 0)=0 OR EXISTS (
-                    SELECT 1 FROM rh_assinaturas_colaboradores duplicate
-                    WHERE duplicate.id <> employee.id AND duplicate.ativo_rh=1
-                      AND duplicate.email_valido=1
-                      AND lower(trim(duplicate.email))=lower(trim(employee.email))
-                )) THEN 1 ELSE 0 END) AS missing
-            FROM rh_assinaturas_colaboradores employee
-            """
-        ).fetchone()
+    employees = list_employees(active_only=True)
     return {
-        "active": int(row["active"] or 0),
-        "ready": int(row["ready"] or 0),
-        "missing_email": int(row["missing"] or 0),
+        "active": len(employees),
+        "ready": sum(1 for employee in employees if employee["email_ready"]),
+        "missing_email": sum(1 for employee in employees if not employee["email_ready"]),
     }
 
 
 def lorac_coverage() -> dict:
     """Audit active RH employees that also have an active Lorac identity."""
-    with _connection() as connection:
-        rows = connection.execute(
-            """
-            SELECT id, nome, cargo, email, sharepoint_upn, email_valido,
-                   status_validacao
-            FROM rh_assinaturas_colaboradores
-            WHERE ativo_rh=1 AND COALESCE(sharepoint_ativo, 0)=1
-            ORDER BY nome COLLATE NOCASE
-            """
-        ).fetchall()
+    rows = [
+        employee for employee in list_employees(active_only=True)
+        if employee["sharepoint_active"]
+    ]
     pending = [
         {
-            "id": row["id"], "full_name": row["nome"],
-            "job_title": row["cargo"] or "",
-            "email": (row["email"] or "").strip().lower(),
-            "lorac_upn": row["sharepoint_upn"] or "",
-            "status_validation": row["status_validacao"],
+            "id": row["id"], "full_name": row["full_name"],
+            "job_title": row["job_title"],
+            "email": row["email"],
+            "lorac_upn": row["lorac_upn"],
+            "status_validation": row["status_validation"],
         }
         for row in rows
-        if not row["email_valido"] or not (row["email"] or "").strip()
+        if not row["email_ready"]
     ]
     total = len(rows)
     ready = total - len(pending)

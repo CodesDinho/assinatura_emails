@@ -25,6 +25,9 @@ def create_app(test_config=None):
         ADMIN_USERS_PATH=os.getenv("ADMIN_USERS_PATH", str(BASE_DIR / "config" / "users.json")),
         REQUEST_LOG_PATH=os.getenv("REQUEST_LOG_PATH", str(INSTANCE_DIR / "request_logs.jsonl")),
         GENERATED_FILES_PATH=os.getenv("GENERATED_FILES_PATH", str(INSTANCE_DIR / "generated")),
+        EMPLOYEE_OVERRIDES_PATH=os.getenv(
+            "EMPLOYEE_OVERRIDES_PATH", str(INSTANCE_DIR / "employee_overrides.db")
+        ),
         ADMIN_USERNAME=os.getenv("ADMIN_USERNAME", "admin"),
         ADMIN_PASSWORD_HASH=os.getenv("ADMIN_PASSWORD_HASH", ""),
         MAX_REQUESTS_PER_MINUTE=int(os.getenv("MAX_REQUESTS_PER_MINUTE", "20")),
