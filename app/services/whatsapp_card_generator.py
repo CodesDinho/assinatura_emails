@@ -8,6 +8,7 @@ from app.services.text_formatting import format_job_title, format_person_name
 
 BASE_DIR = Path(__file__).resolve().parents[2]
 MODEL_PATH = BASE_DIR / "assets" / "whatsapp" / "modelo_whats.jpg"
+BACKGROUND_PATH = BASE_DIR / "assets" / "whatsapp" / "fundo_whats.png"
 FONT_PATH = BASE_DIR / "assets" / "fonts" / "Poppins-Bold.ttf"
 
 CARD_SIZE = (637, 637)
@@ -15,7 +16,7 @@ CARD_SIZE = (637, 637)
 # cannot show through after antialiasing/resizing the uploaded photo.
 PHOTO_BOX = (204, 75, 445, 320)
 TEXT_AREA = (42, 365, 595, 465)
-BACKGROUND_BLUE = (17, 24, 58)
+BACKGROUND_BLEND = (360, 385)
 WHITE = (255, 255, 255)
 MAX_PHOTO_BYTES = 8 * 1024 * 1024
 MAX_PHOTO_PIXELS = 24_000_000
@@ -79,11 +80,23 @@ def generate_whatsapp_card(name, role, uploaded_photo, output_path):
     """Create the companion WhatsApp card without retaining the uploaded photo."""
     if not MODEL_PATH.exists():
         raise FileNotFoundError(f"Modelo do WhatsApp não encontrado: {MODEL_PATH}")
+    if not BACKGROUND_PATH.exists():
+        raise FileNotFoundError(f"Fundo do WhatsApp não encontrado: {BACKGROUND_PATH}")
     if not FONT_PATH.exists():
         raise FileNotFoundError(f"Fonte Poppins Bold não encontrada: {FONT_PATH}")
 
     profile = _read_profile_photo(uploaded_photo)
     card = Image.open(MODEL_PATH).convert("RGB").resize(CARD_SIZE, Image.Resampling.LANCZOS)
+
+    clean_background = Image.open(BACKGROUND_PATH).convert("RGB").resize(CARD_SIZE, Image.Resampling.LANCZOS)
+    blend_start, blend_end = BACKGROUND_BLEND
+    background_mask = Image.new("L", CARD_SIZE, 0)
+    mask_pixels = background_mask.load()
+    for y in range(blend_start, CARD_SIZE[1]):
+        opacity = 255 if y >= blend_end else round(255 * (y - blend_start) / (blend_end - blend_start))
+        for x in range(CARD_SIZE[0]):
+            mask_pixels[x, y] = opacity
+    card.paste(clean_background, (0, 0), background_mask)
 
     left, top, right, bottom = PHOTO_BOX
     photo_size = (right - left, bottom - top)
@@ -93,7 +106,6 @@ def generate_whatsapp_card(name, role, uploaded_photo, output_path):
     card.paste(profile, (left, top), mask)
 
     draw = ImageDraw.Draw(card)
-    draw.rectangle(TEXT_AREA, fill=BACKGROUND_BLUE)
     display_name = format_person_name(name or "Nome do Colaborador").upper()
     display_role = format_job_title(role or "").upper()
     name_font = _fit_font(draw, display_name, 545, 43, 25)

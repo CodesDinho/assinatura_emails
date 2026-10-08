@@ -16,6 +16,7 @@ data/*.xlsx
 data/*.xlsm
 data/*.pptx
 data/*.zip
+data/*.png
 data/modelo_whats.jpg
 data/~$*
 data/backups/

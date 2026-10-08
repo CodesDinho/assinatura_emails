@@ -137,6 +137,8 @@ def test_generate_whatsapp_card_uses_uploaded_photo_and_employee_data(tmp_path):
         # placeholder portrait close to either side of the white rim.
         assert generated.getpixel((207, 197)) == (80, 140, 190)
         assert generated.getpixel((441, 197)) == (80, 140, 190)
+        # The name and role sit on the patterned artwork, not a solid blue bar.
+        assert generated.getpixel((50, 400)) != (17, 24, 58)
 
 
 def test_signature_uses_bundled_poppins_bold():
