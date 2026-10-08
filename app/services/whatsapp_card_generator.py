@@ -11,7 +11,9 @@ MODEL_PATH = BASE_DIR / "assets" / "whatsapp" / "modelo_whats.jpg"
 FONT_PATH = BASE_DIR / "assets" / "fonts" / "Poppins-Bold.ttf"
 
 CARD_SIZE = (637, 637)
-PHOTO_BOX = (208, 77, 431, 318)
+# Slightly overlap the template's inner white rim so the placeholder portrait
+# cannot show through after antialiasing/resizing the uploaded photo.
+PHOTO_BOX = (204, 75, 445, 320)
 TEXT_AREA = (42, 365, 595, 465)
 BACKGROUND_BLUE = (17, 24, 58)
 WHITE = (255, 255, 255)

@@ -133,6 +133,10 @@ def test_generate_whatsapp_card_uses_uploaded_photo_and_employee_data(tmp_path):
         assert generated.size == (637, 637)
         assert generated.format == "PNG"
         assert generated.getpixel((319, 190)) == (80, 140, 190)
+        # The uploaded portrait fills the whole opening without exposing the
+        # placeholder portrait close to either side of the white rim.
+        assert generated.getpixel((207, 197)) == (80, 140, 190)
+        assert generated.getpixel((441, 197)) == (80, 140, 190)
 
 
 def test_signature_uses_bundled_poppins_bold():
