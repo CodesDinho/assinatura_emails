@@ -24,10 +24,10 @@ Slack está fora do escopo, pois nem todos os colaboradores possuem acesso.
 
 ### RH/TI administrador
 
-- importa ou substitui a lista oficial em XLSX/CSV;
+- envia uma lista XLSX/CSV como carga pendente para o fluxo de equalização;
 - consulta registros válidos, inválidos e duplicados antes de confirmar a importação;
-- ativa ou desativa colaboradores;
-- corrige dados na fonte oficial e importa novamente;
+- aplica correções operacionais locais sem alterar a base corporativa somente leitura;
+- solicita ao RH a correção definitiva na fonte e uma nova publicação homologada;
 - consulta histórico de solicitações e falhas de envio;
 - não visualiza nem armazena senha de e-mail do colaborador.
 
@@ -43,8 +43,10 @@ Planilha fornecida pela Cassiane/RH, inicialmente com:
 | Ativo | Recomendado | `SIM` ou `NÃO`; ausente significa ativo somente na primeira versão |
 | Telefone | Opcional | Usado apenas se a identidade visual exigir valor individual |
 
-Rejeitar a importação definitiva quando houver e-mail duplicado, e-mail inválido ou linha sem nome ou
-cargo. Exibir uma prévia dos problemas antes de gravar.
+Rejeitar a publicação definitiva quando houver identidade técnica repetida, e-mail válido associado a
+mais de um colaborador ativo, e-mail inválido ou linha sem nome ou cargo. Exibir uma prévia dos
+problemas antes de gravar. Uma nova publicação atualiza/inclui os presentes e marca os ausentes como
+inativos; ela não apaga fisicamente o histórico do banco.
 
 ## 4. Fluxo do colaborador
 

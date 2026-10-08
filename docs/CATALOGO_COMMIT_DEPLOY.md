@@ -113,4 +113,9 @@ O SQLite corporativo não faz parte da imagem nem do Git. Ele é montado do host
 
 Uploads feitos nesta aplicação ficam em `/app/data/pending_imports` e não alteram a base publicada. Após um upload, a TI deve executar a etapa 4 — Analisar Email/SharePoint x RH — no projeto de equalização, homologar a prévia e publicá-la. A planilha legada permanece apenas para rollback controlado.
 
+A publicação é incremental e auditável: registros ausentes são inativados, não apagados. A
+publicação deve ser bloqueada tanto para identidades técnicas repetidas quanto para um e-mail válido
+associado a mais de um colaborador ativo. As regras completas e a separação entre correções locais e
+dados corporativos estão em [REGRAS_PUBLICACAO_RH.md](REGRAS_PUBLICACAO_RH.md).
+
 Após substituir o container, valide o endpoint `/health`, o estado do container, o mount `/shared:ro` e os logs. Um `503` com aviso de equalização ou indisponibilidade deve interromper a entrega; não habilite fallback automático para XLSX.

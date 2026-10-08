@@ -27,6 +27,12 @@ O upload administrativo apenas valida e guarda o arquivo em `/app/data/pending_i
 
 Correções feitas em **Editar** na área administrativa são gravadas em `/app/instance/employee_overrides.db` e aplicadas sobre a publicação somente para este sistema. O banco corporativo permanece intacto; a origem também deve ser corrigida pelo RH para que futuras publicações tragam o dado correto.
 
+Uma nova publicação não apaga o histórico do SQLite: atualiza ou inclui os colaboradores da carga e
+marca como inativos os ausentes. Identidades técnicas repetidas devem impedir a publicação. Além
+disso, um mesmo e-mail válido não pode pertencer a dois colaboradores ativos; o projeto de
+assinaturas bloqueia consultas nessa condição como defesa adicional. Consulte
+[as regras da publicação de RH](docs/REGRAS_PUBLICACAO_RH.md).
+
 Para produção com HTTPS, configure `SESSION_COOKIE_SECURE=true`. Não versione `.env`, arquivos Excel nem PowerPoint.
 
 ## Testes

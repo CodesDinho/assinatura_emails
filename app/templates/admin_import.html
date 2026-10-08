@@ -5,6 +5,7 @@
   <h1>Enviar carga pendente de colaboradores</h1>
   <p>O arquivo será validado e armazenado como pendência. Ele não atualizará a base corporativa.</p>
   <p>Depois, solicite à TI a etapa 4 — Analisar Email/SharePoint x RH — no projeto de equalização e a publicação da prévia homologada.</p>
+  <div class="alert notice">Uma nova publicação não apaga o histórico: colaboradores ausentes são marcados como inativos. A publicação deve ser bloqueada se houver identidade repetida ou o mesmo e-mail válido em mais de um colaborador ativo.</div>
   <form id="import-form" method="post" enctype="multipart/form-data">
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
     <label for="file">Arquivo CSV/XLSX</label>
