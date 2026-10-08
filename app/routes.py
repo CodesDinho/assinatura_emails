@@ -19,6 +19,7 @@ from app.services.corporate_employee_store import (
 from app.services.pending_import_store import list_pending_imports, save_pending_import
 from app.services.request_log import append_request_log, recent_request_logs, successful_request_emails
 from app.services.signature_generator import generate_signature_image
+from app.services.whatsapp_card_generator import InvalidProfilePhoto, generate_whatsapp_card
 
 
 _LOGIN_ATTEMPTS = {}
@@ -141,13 +142,36 @@ def register_routes(app):
             updated_employee["phone"] = phone
             employee = updated_employee
 
+        uploaded_photo = request.files.get("profile_photo")
+        if not uploaded_photo or not uploaded_photo.filename:
+            return render_template(
+                "confirm.html",
+                employee=employee,
+                photo_error="Selecione uma foto do seu rosto para gerar a imagem do WhatsApp.",
+            ), 400
+
         signature_path = None
+        whatsapp_card_path = None
         try:
             temp_dir = Path(current_app.config["GENERATED_FILES_PATH"])
             temp_dir.mkdir(parents=True, exist_ok=True)
-            signature_path = temp_dir / f"{email.split('@')[0]}_assinatura.png"
+            request_id = secrets.token_hex(8)
+            file_prefix = email.split("@")[0]
+            signature_path = temp_dir / f"{file_prefix}_{request_id}_assinatura.png"
+            whatsapp_card_path = temp_dir / f"{file_prefix}_{request_id}_whatsapp.png"
             generate_signature_image(employee["full_name"], employee["job_title"], email, signature_path, phone=employee.get("phone", ""))
-            response = send_signature_email(email, str(signature_path), employee["full_name"])
+            try:
+                generate_whatsapp_card(
+                    employee["full_name"], employee["job_title"], uploaded_photo, whatsapp_card_path
+                )
+            except InvalidProfilePhoto as exc:
+                return render_template("confirm.html", employee=employee, photo_error=str(exc)), 400
+            response = send_signature_email(
+                email,
+                str(signature_path),
+                employee["full_name"],
+                whatsapp_card_path=str(whatsapp_card_path),
+            )
             if response.get("status") in {"sent", "simulated"}:
                 _log_request(email, "sent", "assinatura enviada")
                 return render_template("success.html", email=email)
@@ -157,6 +181,11 @@ def register_routes(app):
             if signature_path and signature_path.exists():
                 try:
                     signature_path.unlink()
+                except OSError:
+                    pass
+            if whatsapp_card_path and whatsapp_card_path.exists():
+                try:
+                    whatsapp_card_path.unlink()
                 except OSError:
                     pass
 

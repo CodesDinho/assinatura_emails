@@ -44,7 +44,12 @@ def resolve_smtp_settings():
     }
 
 
-def send_signature_email(recipient_email: str, attachment_path: str, employee_name: str = "Colaborador"):
+def send_signature_email(
+    recipient_email: str,
+    attachment_path: str,
+    employee_name: str = "Colaborador",
+    whatsapp_card_path: str | None = None,
+):
     settings = resolve_smtp_settings()
     smtp_host = settings["host"]
 
@@ -57,11 +62,14 @@ def send_signature_email(recipient_email: str, attachment_path: str, employee_na
     message["Subject"] = "Sua assinatura de e-mail — Dinho Distribuidora"
     message.set_content(
         "Olá!\n\nSua assinatura foi gerada com sucesso.\n\n"
-        "Anexamos a imagem pronta para uso.\n"
-        "Instrução rápida: salve a imagem e configure-a como assinatura no seu cliente de e-mail."
+        "Anexamos a assinatura pronta para uso e a imagem personalizada para WhatsApp.\n"
+        "Instrução rápida: salve a assinatura e configure-a no seu cliente de e-mail."
     )
     with open(attachment_path, "rb") as file:
         message.add_attachment(file.read(), maintype="image", subtype="png", filename="assinatura.png")
+    if whatsapp_card_path:
+        with open(whatsapp_card_path, "rb") as file:
+            message.add_attachment(file.read(), maintype="image", subtype="png", filename="imagem-whatsapp.png")
 
     try:
         if settings["use_ssl"]:

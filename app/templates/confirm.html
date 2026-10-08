@@ -11,7 +11,7 @@
     <p><strong>E-mail:</strong> {{ employee['email'] }}</p>
   </div>
 
-  <form method="post" action="{{ url_for('solicitar_assinatura') }}">
+  <form method="post" action="{{ url_for('solicitar_assinatura') }}" enctype="multipart/form-data">
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
     <input type="hidden" name="email" value="{{ employee['email'] }}">
     <label for="phone">Número de celular</label>
@@ -19,7 +19,11 @@
     <small id="phone-help" class="field-help">Confira ou corrija o número. A correção será usada somente nesta assinatura; solicite a atualização permanente à TI.</small>
     <small class="field-help">Caso seja necessária a edição de cargo, entre em contato com o RH.</small>
     {% if phone_error %}<p id="phone-error" class="field-error">{{ phone_error }}</p>{% endif %}
-    <button type="submit">Enviar minha assinatura</button>
+    <label for="profile_photo">Foto do rosto</label>
+    <input id="profile_photo" name="profile_photo" type="file" accept="image/jpeg,image/png,image/webp" required aria-describedby="photo-help{% if photo_error %} photo-error{% endif %}">
+    <small id="photo-help" class="field-help">Use uma foto nítida, de frente e com o rosto centralizado. Formatos JPG, PNG ou WEBP, até 8 MB. A foto é usada somente para gerar a imagem e não fica armazenada.</small>
+    {% if photo_error %}<p id="photo-error" class="field-error">{{ photo_error }}</p>{% endif %}
+    <button type="submit">Enviar assinatura e imagem do WhatsApp</button>
   </form>
 </section>
 {% endblock %}

@@ -1,3 +1,4 @@
+from io import BytesIO
 from pathlib import Path
 import sqlite3
 
@@ -5,6 +6,7 @@ from app import create_app
 from app.services.email_sender import resolve_smtp_settings
 from app.services.employee_importer import build_employee_record, normalize_email, validate_employee_row
 from app.services.signature_generator import ICON_BLUE, _font, generate_signature_image
+from app.services.whatsapp_card_generator import generate_whatsapp_card
 from app.services.text_formatting import format_job_title, format_person_name
 from app.services.admin_auth import authenticate_user
 from app.services.request_log import append_request_log, successful_request_emails
@@ -109,6 +111,28 @@ def test_generate_signature_image_creates_png(tmp_path):
         assert generated.crop((400, 145, 500, 173)).getcolors(maxcolors=1) == [(2800, (255, 255, 255))]
         # Its separator extends through the right side of the signature.
         assert generated.getpixel((500, 69)) == ICON_BLUE
+
+
+def _sample_profile_photo():
+    from PIL import Image
+
+    payload = BytesIO()
+    Image.new("RGB", (300, 400), (80, 140, 190)).save(payload, format="JPEG")
+    payload.seek(0)
+    return payload
+
+
+def test_generate_whatsapp_card_uses_uploaded_photo_and_employee_data(tmp_path):
+    from PIL import Image
+
+    target = tmp_path / "whatsapp.png"
+    result = generate_whatsapp_card("Maria da Silva", "Analista", _sample_profile_photo(), target)
+
+    assert result.exists()
+    with Image.open(result) as generated:
+        assert generated.size == (637, 637)
+        assert generated.format == "PNG"
+        assert generated.getpixel((319, 190)) == (80, 140, 190)
 
 
 def test_signature_uses_bundled_poppins_bold():
@@ -217,7 +241,8 @@ def test_send_uses_email_returned_by_sqlite(tmp_path, monkeypatch):
             "csrf_token": token,
             "email": "MARIA@EMPRESA.COM",
             "phone": "1111",
-        })
+            "profile_photo": (_sample_profile_photo(), "rosto.jpg"),
+        }, content_type="multipart/form-data")
 
     assert sent_to == ["maria@empresa.com"]
 
@@ -418,6 +443,8 @@ def test_employee_can_update_phone_before_generating_signature(tmp_path, monkeyp
         confirmation = client.post("/consultar", data={"email": "maria@empresa.com"})
         assert confirmation.status_code == 200
         assert 'name="phone"' in confirmation.text
+        assert 'name="profile_photo"' in confirmation.text
+        assert 'enctype="multipart/form-data"' in confirmation.text
         assert 'value="1111"' in confirmation.text
         assert "Caso seja necessária a edição de cargo" in confirmation.text
         token = confirmation.text.split('name="csrf_token" value="', 1)[1].split('"', 1)[0]
@@ -425,9 +452,11 @@ def test_employee_can_update_phone_before_generating_signature(tmp_path, monkeyp
             "csrf_token": token,
             "email": "maria@empresa.com",
             "phone": "+55 41 99999-0000",
-        })
+            "profile_photo": (_sample_profile_photo(), "rosto.jpg"),
+        }, content_type="multipart/form-data")
         assert sent.status_code == 200
         assert "maria@empresa.com" in successful_request_emails(log_path)
+        assert not list((tmp_path / "generated").glob("*.png"))
 
     assert database_path.read_bytes() == before
 

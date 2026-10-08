@@ -28,6 +28,7 @@ def create_app(test_config=None):
         ADMIN_USERNAME=os.getenv("ADMIN_USERNAME", "admin"),
         ADMIN_PASSWORD_HASH=os.getenv("ADMIN_PASSWORD_HASH", ""),
         MAX_REQUESTS_PER_MINUTE=int(os.getenv("MAX_REQUESTS_PER_MINUTE", "20")),
+        MAX_CONTENT_LENGTH=10 * 1024 * 1024,
         RATE_LIMIT_WINDOW_SECONDS=int(os.getenv("RATE_LIMIT_WINDOW_SECONDS", "60")),
         SMTP_HOST=os.getenv("SMTP_HOST") or os.getenv("SGQ_SMTP_HOST", ""),
         SMTP_PORT=int(os.getenv("SMTP_PORT") or os.getenv("SGQ_SMTP_PORT", "587")),
