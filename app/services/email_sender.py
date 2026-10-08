@@ -55,6 +55,12 @@ def send_signature_email(
 
     if not smtp_host:
         return {"status": "simulated", "message": "E-mail simulado; SMTP não configurado."}
+    if settings["username"] and not settings["password"]:
+        return {
+            "status": "error",
+            "code": "smtp_configuration",
+            "message": "SMTP_USERNAME está definido, mas SMTP_PASSWORD está vazio.",
+        }
 
     message = EmailMessage()
     message["From"] = settings["from_email"]
@@ -85,7 +91,13 @@ def send_signature_email(
 
         smtp.send_message(message)
         smtp.quit()
-    except Exception as exc:
-        return {"status": "error", "message": f"Falha ao enviar e-mail: {exc}"}
+    except smtplib.SMTPAuthenticationError as exc:
+        return {
+            "status": "error",
+            "code": "smtp_authentication",
+            "message": f"Falha de autenticação no servidor SMTP ({exc.smtp_code}).",
+        }
+    except (smtplib.SMTPException, OSError) as exc:
+        return {"status": "error", "code": "smtp_connection", "message": f"Falha ao enviar e-mail: {exc}"}
 
     return {"status": "sent", "message": "E-mail enviado com sucesso."}

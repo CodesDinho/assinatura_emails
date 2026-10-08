@@ -24,14 +24,25 @@
   {% endif %}
 
   <h2>Cobertura Lorac</h2>
-  <p>{{ lorac_coverage['ready'] }} de {{ lorac_coverage['total'] }} colaboradores ativos com identidade Lorac ativa possuem e-mail corporativo validado ({{ lorac_coverage['coverage_percent'] }}%).</p>
+  <div class="table-wrapper compact-table"><table class="summary-table">
+    <thead><tr><th>Total com Lorac ativo</th><th>Com e-mail validado</th><th>Pendências</th><th>Cobertura</th></tr></thead>
+    <tbody><tr>
+      <td>{{ lorac_coverage['total'] }}</td>
+      <td>{{ lorac_coverage['ready'] }}</td>
+      <td>{{ lorac_coverage['pending_count'] }}</td>
+      <td>{{ lorac_coverage['coverage_percent'] }}%</td>
+    </tr></tbody>
+  </table></div>
   {% if lorac_coverage['pending'] %}
     <p class="error">A publicação possui {{ lorac_coverage['pending_count'] }} pendência(s) e ainda não atingiu 100% de cobertura.</p>
-    <ul>
+    <div class="table-wrapper compact-table"><table>
+      <thead><tr><th>Colaborador</th><th>Cargo</th><th>Identidade Lorac</th><th>Situação</th></tr></thead>
+      <tbody>
       {% for item in lorac_coverage['pending'] %}
-        <li>{{ item['full_name'] }} — {{ item['job_title'] }} — Lorac: {{ item['lorac_upn'] }} — sem e-mail corporativo validado</li>
+        <tr><td>{{ item['full_name'] }}</td><td>{{ item['job_title'] }}</td><td>{{ item['lorac_upn'] or '—' }}</td><td>Sem e-mail corporativo validado</td></tr>
       {% endfor %}
-    </ul>
+      </tbody>
+    </table></div>
   {% else %}
     <p>Todos os colaboradores ativos com identidade Lorac ativa possuem e-mail corporativo validado.</p>
   {% endif %}
@@ -63,7 +74,13 @@
         <td>{{ employee['full_name'] }}{% if employee['overridden'] %} <span class="override-state" title="Corrigido por {{ employee['override_updated_by'] }} em {{ employee['override_updated_at'] }}">corrigido</span>{% endif %}</td><td>{{ employee['job_title'] }}</td><td>{{ employee['email'] or '—' }}{% if employee['duplicate_email'] %} <span class="error">(duplicado — bloqueado)</span>{% endif %}</td><td>{{ employee['phone'] or '—' }}</td>
         <td>{{ 'Ativo' if employee['active'] else 'Inativo' }}</td>
         <td data-sort-value="{{ 1 if employee['signature_generated'] else 0 }}"><span class="signature-state {{ 'generated' if employee['signature_generated'] else 'pending' }}">{{ 'Sim' if employee['signature_generated'] else 'Não' }}</span></td>
-        <td><a class="table-action" href="{{ url_for('admin_employee_edit', employee_id=employee['id']) }}">Editar</a></td>
+        <td><div class="table-actions">
+          <a class="table-action" href="{{ url_for('admin_employee_edit', employee_id=employee['id']) }}">Editar</a>
+          <form method="post" action="{{ url_for('admin_employee_delete', employee_id=employee['id']) }}" onsubmit="return confirm('Excluir este colaborador do sistema? Esta ação oculta o registro, mas não altera o banco do RH.');">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <button class="table-action danger" type="submit">Excluir</button>
+          </form>
+        </div></td>
       </tr>
     {% else %}
       <tr><td colspan="7">Nenhum colaborador disponível.</td></tr>

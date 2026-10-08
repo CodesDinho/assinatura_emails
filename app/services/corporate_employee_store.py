@@ -149,11 +149,15 @@ def _merged_employees() -> list[dict]:
             override_updated_by=override["updated_by"],
             override_updated_at=override["updated_at"],
         )
+        employee["deleted"] = bool(override.get("deleted", 0))
         employee["email_ready"] = bool(EMAIL_PATTERN.fullmatch(employee["email"]))
+
+    for employee in employees:
+        employee.setdefault("deleted", False)
 
     active_email_counts = {}
     for employee in employees:
-        if employee["active"] and employee["email"] and employee["email_ready"]:
+        if not employee["deleted"] and employee["active"] and employee["email"] and employee["email_ready"]:
             active_email_counts[employee["email"]] = active_email_counts.get(employee["email"], 0) + 1
     for employee in employees:
         employee["duplicate_email"] = (
@@ -165,14 +169,20 @@ def _merged_employees() -> list[dict]:
 
 
 def list_employees(*, active_only: bool = True) -> list[dict]:
-    employees = _merged_employees()
+    employees = [employee for employee in _merged_employees() if not employee["deleted"]]
     if active_only:
         employees = [employee for employee in employees if employee["active"]]
     return sorted(employees, key=lambda employee: employee["full_name"].casefold())
 
 
 def find_employee_by_id(employee_id: int) -> dict | None:
-    return next((employee for employee in _merged_employees() if employee["id"] == employee_id), None)
+    return next(
+        (
+            employee for employee in _merged_employees()
+            if employee["id"] == employee_id and not employee["deleted"]
+        ),
+        None,
+    )
 
 
 def find_employee_by_email(
@@ -181,7 +191,10 @@ def find_employee_by_email(
     normalized = str(email or "").strip().lower()
     if not normalized:
         return None
-    matches = [employee for employee in _merged_employees() if employee["email"] == normalized]
+    matches = [
+        employee for employee in _merged_employees()
+        if not employee["deleted"] and employee["email"] == normalized
+    ]
     if active_only:
         matches = [employee for employee in matches if employee["active"]]
     if require_valid_email:

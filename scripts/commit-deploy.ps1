@@ -30,6 +30,41 @@ function Get-DotEnvValue {
     return $line.Substring($prefix.Length).Trim().Trim('"').Trim("'")
 }
 
+function Merge-ContainerEnvironment {
+    param([object[]]$Current, [string]$DotEnvPath)
+    $environment = [ordered]@{}
+    foreach ($item in @($Current)) {
+        $separator = ([string]$item).IndexOf('=')
+        if ($separator -gt 0) {
+            $environment[([string]$item).Substring(0, $separator)] = ([string]$item).Substring($separator + 1)
+        }
+    }
+    $fallbacks = [ordered]@{
+        SMTP_HOST     = @('SMTP_HOST', 'SGQ_SMTP_HOST')
+        SMTP_PORT     = @('SMTP_PORT', 'SGQ_SMTP_PORT')
+        SMTP_USERNAME = @('SMTP_USERNAME', 'SGQ_SMTP_USER')
+        SMTP_PASSWORD = @('SMTP_PASSWORD', 'SGQ_SMTP_PASSWORD')
+        SMTP_FROM     = @('SMTP_FROM', 'SGQ_FROM_EMAIL')
+        SMTP_USE_TLS  = @('SMTP_USE_TLS', 'SGQ_SMTP_TLS')
+        SMTP_SSL      = @('SMTP_SSL', 'SGQ_SMTP_SSL')
+    }
+    foreach ($target in $fallbacks.Keys) {
+        if (-not [string]::IsNullOrWhiteSpace([string]$environment[$target])) { continue }
+        foreach ($source in $fallbacks[$target]) {
+            $value = Get-DotEnvValue -Path $DotEnvPath -Name $source
+            if (-not [string]::IsNullOrWhiteSpace($value)) {
+                $environment[$target] = $value
+                break
+            }
+        }
+    }
+    if (-not [string]::IsNullOrWhiteSpace([string]$environment['SMTP_USERNAME']) -and
+        [string]::IsNullOrWhiteSpace([string]$environment['SMTP_PASSWORD'])) {
+        throw 'SMTP_PASSWORD está vazio. Preencha SMTP_PASSWORD ou SGQ_SMTP_PASSWORD no .env antes do deploy.'
+    }
+    return @($environment.GetEnumerator() | ForEach-Object { "$($_.Key)=$($_.Value)" })
+}
+
 function Invoke-PortainerApi {
     param(
         [ValidateSet('GET', 'POST', 'PUT')][string]$Method,
@@ -172,9 +207,11 @@ function Update-PortainerContainer {
     })
     $labels = @{}
     $current.Config.Labels.psobject.Properties | ForEach-Object { $labels[$_.Name] = $_.Value }
+    $dotEnvPath = [IO.Path]::GetFullPath((Join-Path $repositoryPath '.env'))
+    $containerEnvironment = Merge-ContainerEnvironment -Current @($current.Config.Env) -DotEnvPath $dotEnvPath
     $payload = @{
         Image        = $Image
-        Env          = @($current.Config.Env)
+        Env          = $containerEnvironment
         Cmd          = @($current.Config.Cmd)
         Entrypoint   = $current.Config.Entrypoint
         WorkingDir   = $current.Config.WorkingDir

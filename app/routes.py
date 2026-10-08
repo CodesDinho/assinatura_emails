@@ -23,7 +23,7 @@ from app.services.corporate_employee_store import (
     lorac_coverage,
     readiness_summary,
 )
-from app.services.employee_override_store import save_employee_override
+from app.services.employee_override_store import delete_employee_override, save_employee_override
 from app.services.pending_import_store import list_pending_imports, save_pending_import
 from app.services.request_log import append_request_log, recent_request_logs, successful_request_emails
 from app.services.signature_generator import generate_signature_image
@@ -193,7 +193,14 @@ def register_routes(app):
                 _log_request(email, "sent", "assinatura enviada")
                 return render_template("success.html", email=email)
             _log_request(email, "failed", response.get("message", "Falha ao enviar"))
-            return render_template("home.html", error="Não foi possível enviar a assinatura nesse momento.")
+            if response.get("code") in {"smtp_configuration", "smtp_authentication"}:
+                error = (
+                    "O serviço de e-mail recusou a autenticação. A TI já pode identificar a falha "
+                    "na configuração SMTP; tente novamente após a correção."
+                )
+            else:
+                error = "Não foi possível enviar a assinatura nesse momento. Tente novamente mais tarde."
+            return render_template("home.html", error=error)
         finally:
             if signature_path and signature_path.exists():
                 try:
@@ -326,6 +333,31 @@ def register_routes(app):
             session["admin_user"]["username"],
         )
         flash(f"Dados de {edited['full_name']} atualizados com segurança.")
+        return redirect(url_for("admin_dashboard"))
+
+    @app.route("/admin/colaboradores/<int:employee_id>/excluir", methods=["POST"])
+    @_admin_login_required
+    def admin_employee_delete(employee_id):
+        if not _valid_csrf():
+            flash("A sessão expirou. Nenhum registro foi excluído.")
+            return redirect(url_for("admin_dashboard"))
+        status = equalization_status()
+        if not status["equalized"]:
+            flash(status["message"])
+            return redirect(url_for("admin_dashboard"))
+        employee = find_employee_by_id(employee_id)
+        if not employee:
+            flash("Colaborador não encontrado ou já excluído.")
+            return redirect(url_for("admin_dashboard"))
+        delete_employee_override(
+            employee_id,
+            employee,
+            session["admin_user"]["username"],
+        )
+        flash(
+            f"Registro de {employee['full_name']} excluído deste sistema. "
+            "O banco corporativo do RH não foi alterado."
+        )
         return redirect(url_for("admin_dashboard"))
 
     @app.route("/admin/import", methods=["GET", "POST"])

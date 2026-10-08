@@ -3,7 +3,7 @@ from pathlib import Path
 import sqlite3
 
 from app import create_app
-from app.services.email_sender import resolve_smtp_settings
+from app.services.email_sender import resolve_smtp_settings, send_signature_email
 from app.services.employee_importer import build_employee_record, normalize_email, validate_employee_row
 from app.services.signature_generator import ICON_BLUE, _font, generate_signature_image
 from app.services.whatsapp_card_generator import generate_whatsapp_card
@@ -266,6 +266,9 @@ def test_deploy_script_prepulls_image_and_has_portainer_timeouts():
     assert "TimeoutSec" in script
     assert "RegistryId = 1" in config
     assert "PullTimeoutSeconds = 300" in config
+    assert "Merge-ContainerEnvironment" in script
+    assert "SGQ_SMTP_PASSWORD" in script
+    assert "SMTP_PASSWORD está vazio" in script
     assert "StackId" not in config
     assert "/api/stacks/" not in script
 
@@ -446,6 +449,8 @@ def test_employee_can_update_phone_before_generating_signature(tmp_path, monkeyp
         assert 'name="phone"' in confirmation.text
         assert 'name="profile_photo"' in confirmation.text
         assert 'enctype="multipart/form-data"' in confirmation.text
+        assert 'id="processing-status"' in confirmation.text
+        assert "Processando…" in confirmation.text
         assert 'value="1111"' in confirmation.text
         assert "Caso seja necessária a edição de cargo" in confirmation.text
         token = confirmation.text.split('name="csrf_token" value="', 1)[1].split('"', 1)[0]
@@ -485,8 +490,12 @@ def test_admin_dashboard_marks_generated_signature_and_has_sortable_headers(tmp_
         assert "Assinatura gerada" in dashboard.text
         assert 'class="signature-state generated">Sim' in dashboard.text
         assert "Cobertura Lorac" in dashboard.text
-        assert "1 de 2" in dashboard.text
+        assert "Total com Lorac ativo" in dashboard.text
+        assert "Com e-mail validado" in dashboard.text
+        assert "Pendências" in dashboard.text
         assert "Sem E-mail Válido" in dashboard.text
+        assert ">Editar</a>" in dashboard.text
+        assert ">Excluir</button>" in dashboard.text
 
 
 def test_admin_can_remove_wrong_duplicate_email_without_changing_corporate_database(tmp_path):
@@ -535,8 +544,34 @@ def test_admin_can_remove_wrong_duplicate_email_without_changing_corporate_datab
         available = client.post("/consultar", data={"email": "maria@empresa.com"})
         assert "Roberson Souza" in available.text
 
+        dashboard = client.get("/admin")
+        token = dashboard.text.split('name="csrf_token" value="', 1)[1].split('"', 1)[0]
+        deleted = client.post(
+            "/admin/colaboradores/4/excluir",
+            data={"csrf_token": token},
+            follow_redirects=True,
+        )
+        assert "Registro de Roberson Souza excluído deste sistema" in deleted.text
+        unavailable = client.post("/consultar", data={"email": "maria@empresa.com"})
+        assert "Nenhum cadastro ativo" in unavailable.text
+
     assert overrides_path.exists()
     assert database_path.read_bytes() == corporate_before
+
+
+def test_email_sender_reports_missing_smtp_password_before_connecting(tmp_path, monkeypatch):
+    attachment = tmp_path / "assinatura.png"
+    attachment.write_bytes(b"png")
+    monkeypatch.setenv("SMTP_HOST", "smtp.example.test")
+    monkeypatch.setenv("SMTP_USERNAME", "usuario@example.test")
+    monkeypatch.setenv("SMTP_PASSWORD", "")
+    monkeypatch.delenv("SGQ_SMTP_PASSWORD", raising=False)
+
+    result = send_signature_email("destino@example.test", str(attachment))
+
+    assert result["status"] == "error"
+    assert result["code"] == "smtp_configuration"
+    assert "SMTP_PASSWORD" in result["message"]
 
 
 def test_merge_emails_matches_normalized_names_without_overwriting(tmp_path):

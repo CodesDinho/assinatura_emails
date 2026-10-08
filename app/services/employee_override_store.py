@@ -40,10 +40,16 @@ def _connection() -> sqlite3.Connection:
             registration TEXT NOT NULL DEFAULT '',
             company TEXT NOT NULL DEFAULT '',
             updated_by TEXT NOT NULL,
-            updated_at TEXT NOT NULL
+            updated_at TEXT NOT NULL,
+            deleted INTEGER NOT NULL DEFAULT 0 CHECK (deleted IN (0, 1))
         )
         """
     )
+    columns = {row["name"] for row in connection.execute("PRAGMA table_info(employee_overrides)")}
+    if "deleted" not in columns:
+        connection.execute(
+            "ALTER TABLE employee_overrides ADD COLUMN deleted INTEGER NOT NULL DEFAULT 0"
+        )
     return connection
 
 
@@ -73,7 +79,8 @@ def save_employee_override(employee_id: int, source: dict, values: dict, updated
                 registration=excluded.registration,
                 company=excluded.company,
                 updated_by=excluded.updated_by,
-                updated_at=excluded.updated_at
+                updated_at=excluded.updated_at,
+                deleted=0
             """,
             (
                 employee_id,
@@ -86,6 +93,40 @@ def save_employee_override(employee_id: int, source: dict, values: dict, updated
                 1 if values["active"] else 0,
                 values["registration"],
                 values["company"],
+                updated_by,
+                updated_at,
+            ),
+        )
+        connection.commit()
+
+
+def delete_employee_override(employee_id: int, source: dict, updated_by: str) -> None:
+    updated_at = datetime.now(timezone.utc).isoformat(timespec="seconds")
+    with _connection() as connection:
+        connection.execute(
+            """
+            INSERT INTO employee_overrides (
+                employee_id, source_registration, source_name, full_name, job_title,
+                email, phone, active, registration, company, updated_by, updated_at, deleted
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)
+            ON CONFLICT(employee_id) DO UPDATE SET
+                source_registration=excluded.source_registration,
+                source_name=excluded.source_name,
+                updated_by=excluded.updated_by,
+                updated_at=excluded.updated_at,
+                deleted=1
+            """,
+            (
+                employee_id,
+                source.get("source_registration", source.get("registration", "")),
+                source.get("source_name", source.get("full_name", "")),
+                source["full_name"],
+                source["job_title"],
+                source["email"],
+                source["phone"],
+                1 if source["active"] else 0,
+                source["registration"],
+                source["company"],
                 updated_by,
                 updated_at,
             ),

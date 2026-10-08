@@ -9,7 +9,7 @@ body {
   max-width: 720px;
   margin: 0 auto;
 }
-.container:has(.wide-card) { max-width: 1180px; }
+.container:has(.wide-card) { max-width: 1440px; }
 .card {
   background: #ffffff;
   padding: 28px;
@@ -96,7 +96,8 @@ a {
   color: #154c8c;
 }
 .logout-form, .logout-form button { margin: 0; width: auto; }
-.table-wrapper { overflow-x: auto; }
+.table-wrapper { width: 100%; overflow-x: auto; padding: 0 4px 8px 0; box-sizing: border-box; }
+#employees-table { min-width: 1120px; }
 table { width: 100%; border-collapse: collapse; }
 th, td { padding: 10px; border-bottom: 1px solid #e3e7ed; text-align: left; vertical-align: top; }
 .sort-button { width: auto; padding: 0; margin: 0; border: 0; border-radius: 0; background: transparent; color: inherit; text-align: left; white-space: nowrap; }
@@ -105,7 +106,15 @@ th, td { padding: 10px; border-bottom: 1px solid #e3e7ed; text-align: left; vert
 .signature-state.generated { background: #d9f5e7; color: #146c43; }
 .signature-state.pending { background: #eef1f5; color: #596575; }
 .override-state { display: inline-block; margin-left: 5px; padding: 2px 6px; border-radius: 999px; background: #fff1cc; color: #765500; font-size: 0.72rem; font-weight: bold; }
-.table-action { display: inline-block; padding: 6px 10px; border: 1px solid #154c8c; border-radius: 6px; font-weight: bold; white-space: nowrap; }
+.table-actions { display: flex; align-items: center; gap: 7px; min-width: 145px; padding-right: 2px; }
+.table-actions form { margin: 0; }
+.table-action { display: inline-block; width: auto; margin: 0; padding: 6px 9px; border: 1px solid #154c8c; border-radius: 6px; background: #fff; color: #154c8c; font-size: 0.85rem; font-weight: bold; white-space: nowrap; }
+.table-action.danger { border-color: #a32929; color: #a32929; }
+.table-action.danger:hover { background: #a32929; color: #fff; }
+.compact-table { margin-bottom: 16px; }
+.summary-table th, .summary-table td { text-align: center; }
+.processing-status { margin: -2px 0 8px; padding: 10px 12px; border-radius: 8px; background: #eef4fb; color: #294b73; font-weight: bold; text-align: center; }
+button:disabled { cursor: wait; opacity: 0.72; }
 .field-help { display: block; margin: -8px 0 14px; color: #596575; }
 .field-error { margin: -8px 0 14px; color: #8e1d1d; font-weight: bold; }
 .checkbox-label { display: flex; align-items: center; gap: 8px; margin-bottom: 16px; }
