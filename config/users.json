@@ -17,6 +17,15 @@
       "salt": "31441fa21cd1a104ba338ae4009db921ff996f8c883e7fe8dd875f1903df2f69",
       "senha_hash": "e5cbaeac9860c94299aa526d06532a16973b4c6ee0da559b94022c251f2649f2",
       "iteracoes": 600000
+    },
+    {
+      "username": "roberson.souza",
+      "nome": "Roberson Souza",
+      "perfil": "Validador de assinaturas",
+      "ativo": true,
+      "salt": "77db71d0c5b4f3ce1178239efaa0d7d9914cac09e4874773fe36409aa98f7c63",
+      "senha_hash": "1a96e5f601663c1d43d083feccaee8ad4643613fc1dde9a15de9d026b34c23b2",
+      "iteracoes": 600000
     }
   ]
 }

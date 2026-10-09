@@ -85,6 +85,7 @@ def generate_signature_image(name, role, email, output_path, phone=""):
     role_font = _fit_font(draw, role, 280, 12, 9)
     email_font = _fit_font(draw, email, 260, 8, 6)
     detail_font = _font(8)
+    phone_font = _fit_font(draw, phone, 235, 10, 8) if phone else None
 
     # Positions, colors and relative sizes converted from the PPTX EMU coordinates.
     draw.text((246, 22), name, font=name_font, fill=BRAND_BLUE)
@@ -94,7 +95,7 @@ def generate_signature_image(name, role, email, output_path, phone=""):
     draw.text((270, 91), email, font=email_font, fill=SECONDARY_TEXT)
     draw.text((270, 117), "www.dinhodistribuidora.com.br", font=detail_font, fill=SECONDARY_TEXT)
     if phone:
-        draw.text((270, 145), phone, font=detail_font, fill=SECONDARY_TEXT)
+        draw.text((270, 141), phone, font=phone_font, fill=SECONDARY_TEXT)
 
     image.convert("RGB").save(output, format="PNG", optimize=True)
     return output

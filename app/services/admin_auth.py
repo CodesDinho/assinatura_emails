@@ -42,3 +42,19 @@ def authenticate_user(users_path, username, password):
         "name": user.get("nome", user["username"]),
         "role": user.get("perfil", "Usuário"),
     }
+
+
+def list_active_users(users_path):
+    path = Path(users_path)
+    if not path.exists():
+        return []
+    users = json.loads(path.read_text(encoding="utf-8")).get("usuarios", [])
+    return [
+        {
+            "username": item["username"],
+            "name": item.get("nome", item["username"]),
+            "role": item.get("perfil", "Usuário"),
+        }
+        for item in users
+        if item.get("ativo") and item.get("username")
+    ]

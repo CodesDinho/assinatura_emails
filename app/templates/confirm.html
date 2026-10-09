@@ -23,7 +23,7 @@
     <input id="profile_photo" name="profile_photo" type="file" accept="image/jpeg,image/png,image/webp" required aria-describedby="photo-help{% if photo_error %} photo-error{% endif %}">
     <small id="photo-help" class="field-help">Use uma foto nítida, de frente e com o rosto centralizado. Formatos JPG, PNG ou WEBP, até 8 MB. A foto é usada somente para gerar a imagem e não fica armazenada.</small>
     {% if photo_error %}<p id="photo-error" class="field-error">{{ photo_error }}</p>{% endif %}
-    <button id="signature-submit" type="submit">Enviar assinatura e imagem do WhatsApp</button>
+    <button id="signature-submit" type="submit">Solicitar validação da assinatura</button>
     <p id="processing-status" class="processing-status" role="status" aria-live="polite" hidden>Processando as imagens e enviando o e-mail… Aguarde.</p>
   </form>
 </section>

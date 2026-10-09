@@ -25,6 +25,11 @@ def create_app(test_config=None):
         ADMIN_USERS_PATH=os.getenv("ADMIN_USERS_PATH", str(BASE_DIR / "config" / "users.json")),
         REQUEST_LOG_PATH=os.getenv("REQUEST_LOG_PATH", str(INSTANCE_DIR / "request_logs.jsonl")),
         GENERATED_FILES_PATH=os.getenv("GENERATED_FILES_PATH", str(INSTANCE_DIR / "generated")),
+        SIGNATURE_APPROVALS_PATH=os.getenv(
+            "SIGNATURE_APPROVALS_PATH", str(INSTANCE_DIR / "signature_approvals.db")
+        ),
+        DEFAULT_SIGNATURE_VALIDATOR_USERNAME="roberson.souza",
+        DEFAULT_SIGNATURE_VALIDATOR_EMAIL="roberson.souza@dinhodistribuidora.com.br",
         EMPLOYEE_OVERRIDES_PATH=os.getenv(
             "EMPLOYEE_OVERRIDES_PATH", str(INSTANCE_DIR / "employee_overrides.db")
         ),

@@ -3,11 +3,11 @@ import time
 from functools import wraps
 from pathlib import Path
 
-from flask import current_app, flash, redirect, render_template, request, session, url_for
+from flask import abort, current_app, flash, redirect, render_template, request, send_file, session, url_for
 from werkzeug.security import check_password_hash
 
-from app.services.admin_auth import authenticate_user
-from app.services.email_sender import send_signature_email
+from app.services.admin_auth import authenticate_user, list_active_users
+from app.services.email_sender import send_approval_request_email, send_signature_email
 from app.services.employee_importer import (
     build_employee_record,
     normalize_email,
@@ -27,6 +27,16 @@ from app.services.employee_override_store import delete_employee_override, save_
 from app.services.pending_import_store import list_pending_imports, save_pending_import
 from app.services.request_log import append_request_log, recent_request_logs, successful_request_emails
 from app.services.signature_generator import generate_signature_image
+from app.services.signature_approval_store import (
+    claim_signature_request,
+    complete_signature_request,
+    create_signature_request,
+    fail_signature_request,
+    get_signature_request,
+    get_validator_settings,
+    list_signature_requests,
+    save_validator_settings,
+)
 from app.services.whatsapp_card_generator import InvalidProfilePhoto, generate_whatsapp_card
 
 
@@ -57,7 +67,38 @@ def _admin_login_required(view_func):
     @wraps(view_func)
     def wrapper(*args, **kwargs):
         if not session.get("admin_user"):
-            return redirect(url_for("admin_login"))
+            return redirect(url_for("admin_login", next=request.full_path.rstrip("?")))
+        return view_func(*args, **kwargs)
+    return wrapper
+
+
+def _is_signature_validator():
+    user = session.get("admin_user") or {}
+    expected = get_validator_settings()["validator_username"]
+    return str(user.get("username", "")).strip().lower() == str(expected).strip().lower()
+
+
+def _is_admin_manager():
+    user = session.get("admin_user") or {}
+    return str(user.get("role", "")).strip().lower() == "administrador"
+
+
+def _signature_validator_required(view_func):
+    @wraps(view_func)
+    @_admin_login_required
+    def wrapper(*args, **kwargs):
+        if not _is_signature_validator():
+            abort(403)
+        return view_func(*args, **kwargs)
+    return wrapper
+
+
+def _admin_manager_required(view_func):
+    @wraps(view_func)
+    @_admin_login_required
+    def wrapper(*args, **kwargs):
+        if not _is_admin_manager():
+            abort(403)
         return view_func(*args, **kwargs)
     return wrapper
 
@@ -182,36 +223,28 @@ def register_routes(app):
                     employee["full_name"], employee["job_title"], uploaded_photo, whatsapp_card_path
                 )
             except InvalidProfilePhoto as exc:
+                signature_path.unlink(missing_ok=True)
                 return render_template("confirm.html", employee=employee, photo_error=str(exc)), 400
-            response = send_signature_email(
-                email,
-                str(signature_path),
-                employee["full_name"],
-                whatsapp_card_path=str(whatsapp_card_path),
+            approval = create_signature_request(
+                request_id, employee, signature_path, whatsapp_card_path
             )
-            if response.get("status") in {"sent", "simulated"}:
-                _log_request(email, "sent", "assinatura enviada")
-                return render_template("success.html", email=email)
-            _log_request(email, "failed", response.get("message", "Falha ao enviar"))
-            if response.get("code") in {"smtp_configuration", "smtp_authentication"}:
-                error = (
-                    "O serviço de e-mail recusou a autenticação. A TI já pode identificar a falha "
-                    "na configuração SMTP; tente novamente após a correção."
-                )
-            else:
-                error = "Não foi possível enviar a assinatura nesse momento. Tente novamente mais tarde."
-            return render_template("home.html", error=error)
-        finally:
-            if signature_path and signature_path.exists():
-                try:
-                    signature_path.unlink()
-                except OSError:
-                    pass
-            if whatsapp_card_path and whatsapp_card_path.exists():
-                try:
-                    whatsapp_card_path.unlink()
-                except OSError:
-                    pass
+            approval_url = current_app.config["APP_BASE_URL"].rstrip("/") + url_for(
+                "admin_signature_request", request_id=request_id
+            )
+            validator = get_validator_settings()
+            notification = send_approval_request_email(validator["validator_email"], approval, approval_url)
+            detail = "aguardando aprovação"
+            if notification.get("status") not in {"sent", "simulated"}:
+                detail += f"; notificação falhou: {notification.get('message', 'erro desconhecido')}"
+            _log_request(email, "pending_approval", detail)
+            return render_template("success.html", email=email)
+        except Exception:
+            if not get_signature_request(request_id):
+                if signature_path:
+                    signature_path.unlink(missing_ok=True)
+                if whatsapp_card_path:
+                    whatsapp_card_path.unlink(missing_ok=True)
+            raise
 
     @app.route("/admin/login", methods=["GET", "POST"])
     def admin_login():
@@ -237,6 +270,9 @@ def register_routes(app):
                 session.permanent = True
                 _csrf_token()
                 _LOGIN_ATTEMPTS.pop(key, None)
+                next_url = request.args.get("next", "")
+                if next_url.startswith("/admin/") and not next_url.startswith("//"):
+                    return redirect(next_url)
                 return redirect(url_for("admin_dashboard"))
             _LOGIN_ATTEMPTS.setdefault(key, []).append(time.monotonic())
             flash("Credenciais inválidas.")
@@ -258,6 +294,7 @@ def register_routes(app):
             employee["signature_generated"] = employee["email"] in generated_emails
         logs = recent_request_logs(current_app.config["REQUEST_LOG_PATH"])
         pending = list_pending_imports(current_app.config["PENDING_IMPORTS_PATH"])
+        validator_settings = get_validator_settings()
         return render_template(
             "admin_dashboard.html",
             employees=rows,
@@ -270,16 +307,100 @@ def register_routes(app):
             lorac_coverage=lorac,
             pending_imports=pending,
             request_rows=logs,
+            approval_rows=list_signature_requests() if _is_signature_validator() else [],
+            is_signature_validator=_is_signature_validator(),
+            is_admin_manager=_is_admin_manager(),
+            validator_settings=validator_settings,
+            admin_users=list_active_users(current_app.config["ADMIN_USERS_PATH"]),
         )
 
+    @app.route("/admin/configuracao/aprovador", methods=["POST"])
+    @_admin_manager_required
+    def admin_validator_settings():
+        if not _valid_csrf():
+            flash("A sessão expirou. O aprovador não foi alterado.")
+            return redirect(url_for("admin_dashboard"))
+        username = normalize_text(request.form.get("validator_username")).lower()
+        email = normalize_email(request.form.get("validator_email"))
+        active_users = list_active_users(current_app.config["ADMIN_USERS_PATH"])
+        if not any(item["username"].lower() == username for item in active_users):
+            flash("Selecione um usuário interno ativo para ser o aprovador.")
+            return redirect(url_for("admin_dashboard"))
+        if not email or "@" not in email:
+            flash("Informe um e-mail válido para o aprovador.")
+            return redirect(url_for("admin_dashboard"))
+        save_validator_settings(username, email, session["admin_user"]["username"])
+        flash(f"Aprovador atualizado para {username} ({email}).")
+        return redirect(url_for("admin_dashboard"))
+
+    @app.route("/admin/solicitacoes/<request_id>")
+    @_signature_validator_required
+    def admin_signature_request(request_id):
+        approval = get_signature_request(request_id)
+        if not approval:
+            abort(404)
+        return render_template("admin_signature_request.html", approval=approval)
+
+    @app.route("/admin/solicitacoes/<request_id>/imagem/<kind>")
+    @_signature_validator_required
+    def admin_signature_image(request_id, kind):
+        approval = get_signature_request(request_id)
+        if not approval or kind not in {"signature", "whatsapp"}:
+            abort(404)
+        image_path = Path(approval[f"{kind}_path"])
+        generated_root = Path(current_app.config["GENERATED_FILES_PATH"]).resolve()
+        try:
+            resolved = image_path.resolve(strict=True)
+            resolved.relative_to(generated_root)
+        except (FileNotFoundError, OSError, ValueError):
+            abort(404)
+        return send_file(resolved, mimetype="image/png", max_age=0)
+
+    @app.route("/admin/solicitacoes/<request_id>/aprovar", methods=["POST"])
+    @_signature_validator_required
+    def admin_signature_approve(request_id):
+        if not _valid_csrf():
+            flash("A sessão expirou. A solicitação não foi aprovada.")
+            return redirect(url_for("admin_signature_request", request_id=request_id))
+        approval = get_signature_request(request_id)
+        if not approval:
+            abort(404)
+        reviewer = session["admin_user"]["username"]
+        if not claim_signature_request(request_id, reviewer):
+            flash("Esta solicitação já foi processada ou está sendo enviada.")
+            return redirect(url_for("admin_signature_request", request_id=request_id))
+        try:
+            response = send_signature_email(
+                approval["employee_email"],
+                approval["signature_path"],
+                approval["employee_name"],
+                whatsapp_card_path=approval["whatsapp_path"],
+            )
+        except (OSError, ValueError) as exc:
+            response = {"status": "error", "message": f"Falha ao preparar o envio: {exc}"}
+        if response.get("status") not in {"sent", "simulated"}:
+            fail_signature_request(request_id, response.get("message"))
+            _log_request(approval["employee_email"], "approval_send_failed", response.get("message", ""))
+            flash("A aprovação foi registrada, mas o e-mail não pôde ser enviado. Você pode tentar novamente.")
+            return redirect(url_for("admin_signature_request", request_id=request_id))
+        complete_signature_request(request_id, reviewer)
+        _log_request(approval["employee_email"], "sent", f"aprovada por {reviewer}")
+        for path_value in (approval["signature_path"], approval["whatsapp_path"]):
+            try:
+                Path(path_value).unlink(missing_ok=True)
+            except OSError:
+                pass
+        flash(f"Assinatura de {approval['employee_name']} aprovada e enviada.")
+        return redirect(url_for("admin_dashboard"))
+
     @app.route("/admin/colaboradores/novo", methods=["GET", "POST"])
-    @_admin_login_required
+    @_admin_manager_required
     def admin_employee_new():
         flash("A base corporativa é somente leitura. Cadastros devem ser tratados no projeto de equalização.")
         return redirect(url_for("admin_dashboard"))
 
     @app.route("/admin/colaboradores/<int:employee_id>/editar", methods=["GET", "POST"])
-    @_admin_login_required
+    @_admin_manager_required
     def admin_employee_edit(employee_id):
         status = equalization_status()
         if not status["equalized"]:
@@ -336,7 +457,7 @@ def register_routes(app):
         return redirect(url_for("admin_dashboard"))
 
     @app.route("/admin/colaboradores/<int:employee_id>/excluir", methods=["POST"])
-    @_admin_login_required
+    @_admin_manager_required
     def admin_employee_delete(employee_id):
         if not _valid_csrf():
             flash("A sessão expirou. Nenhum registro foi excluído.")
@@ -361,7 +482,7 @@ def register_routes(app):
         return redirect(url_for("admin_dashboard"))
 
     @app.route("/admin/import", methods=["GET", "POST"])
-    @_admin_login_required
+    @_admin_manager_required
     def admin_import():
         if request.method == "POST":
             if not _valid_csrf():

@@ -25,7 +25,7 @@ label {
   margin-bottom: 8px;
   font-weight: bold;
 }
-input, button {
+input, select, button {
   width: 100%;
   box-sizing: border-box;
   padding: 12px 14px;
@@ -119,7 +119,15 @@ button:disabled { cursor: wait; opacity: 0.72; }
 .field-error { margin: -8px 0 14px; color: #8e1d1d; font-weight: bold; }
 .checkbox-label { display: flex; align-items: center; gap: 8px; margin-bottom: 16px; }
 .checkbox-label input { width: auto; margin: 0; }
+.validator-settings { display: grid; grid-template-columns: minmax(220px, 1fr) minmax(280px, 1.5fr) auto; align-items: end; gap: 12px; margin-bottom: 8px; }
+.validator-settings input, .validator-settings select, .validator-settings button { margin-bottom: 0; }
+.approval-preview-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 24px; margin: 24px 0; }
+.approval-preview-grid figure { margin: 0; padding: 16px; border: 1px solid #e3e7ed; border-radius: 10px; background: #f8fafc; }
+.approval-preview-grid figcaption { margin-bottom: 12px; font-weight: bold; }
+.approval-preview-grid img { display: block; max-width: 100%; height: auto; margin: 0 auto; }
 @media (max-width: 640px) {
   .page-header { align-items: flex-start; }
   .actions { flex-direction: column; align-items: stretch; }
+  .approval-preview-grid { grid-template-columns: 1fr; }
+  .validator-settings { grid-template-columns: 1fr; }
 }

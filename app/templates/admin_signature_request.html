@@ -1,0 +1,35 @@
+{% extends 'base.html' %}
+{% block title %}Validar assinatura{% endblock %}
+{% block content %}
+<section class="card wide-card">
+  <div class="page-header">
+    <div>
+      <h1>Validar assinatura</h1>
+      <p><strong>{{ approval['employee_name'] }}</strong> — {{ approval['employee_email'] }}</p>
+      <p>{{ approval['job_title'] or 'Sem cargo' }} | {{ approval['phone'] or 'Sem celular' }}</p>
+    </div>
+    <a class="button-link secondary" href="{{ url_for('admin_dashboard') }}">Voltar ao painel</a>
+  </div>
+
+  {% if approval['status'] in ('pending', 'failed') %}
+    <div class="approval-preview-grid">
+      <figure>
+        <figcaption>Assinatura de e-mail</figcaption>
+        <img src="{{ url_for('admin_signature_image', request_id=approval['request_id'], kind='signature') }}" alt="Prévia da assinatura de e-mail">
+      </figure>
+      <figure>
+        <figcaption>Imagem para WhatsApp</figcaption>
+        <img src="{{ url_for('admin_signature_image', request_id=approval['request_id'], kind='whatsapp') }}" alt="Prévia da imagem para WhatsApp">
+      </figure>
+    </div>
+    {% if approval['error_message'] %}<p class="error">Última tentativa: {{ approval['error_message'] }}</p>{% endif %}
+    <form method="post" action="{{ url_for('admin_signature_approve', request_id=approval['request_id']) }}" onsubmit="return confirm('Aprovar e enviar estas imagens para {{ approval['employee_email'] }}?');">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <button type="submit">Aprovar e enviar ao solicitante</button>
+    </form>
+  {% else %}
+    <p>Esta solicitação está com status <strong>{{ approval['status'] }}</strong>.</p>
+    {% if approval['reviewed_by'] %}<p>Validada por {{ approval['reviewed_by'] }} em {{ approval['reviewed_at'] }}.</p>{% endif %}
+  {% endif %}
+</section>
+{% endblock %}

@@ -10,6 +10,7 @@ from app.services.whatsapp_card_generator import generate_whatsapp_card
 from app.services.text_formatting import format_job_title, format_person_name
 from app.services.admin_auth import authenticate_user
 from app.services.request_log import append_request_log, successful_request_emails
+from app.services.signature_approval_store import get_validator_settings, save_validator_settings
 from app.services.workbook_store import (
     find_employee_by_email,
     list_employees,
@@ -226,32 +227,93 @@ def test_unavailable_database_does_not_fall_back_to_legacy_workbook(tmp_path):
     assert "Legado" not in response.text
 
 
-def test_send_uses_email_returned_by_sqlite(tmp_path, monkeypatch):
+def test_signature_is_sent_to_sqlite_email_only_after_validator_approval(tmp_path, monkeypatch):
     database_path = _corporate_database(tmp_path / "corporate.db")
     sent_to = []
+    notified = []
     monkeypatch.setattr(
         "app.routes.send_signature_email",
         lambda email, *_args, **_kwargs: sent_to.append(email) or {"status": "simulated"},
     )
+    monkeypatch.setattr(
+        "app.routes.send_approval_request_email",
+        lambda email, *_args, **_kwargs: notified.append(email) or {"status": "simulated"},
+    )
+    approval_path = tmp_path / "approvals.db"
     app = create_app(test_config={
         "TESTING": True,
         "SECRET_KEY": "test-secret",
         "SHARED_SQLITE_PATH": str(database_path),
         "GENERATED_FILES_PATH": str(tmp_path / "generated"),
         "REQUEST_LOG_PATH": str(tmp_path / "requests.jsonl"),
+        "SIGNATURE_APPROVALS_PATH": str(approval_path),
     })
+    with app.app_context():
+        save_validator_settings("roberson.souza", "validador@empresa.com", "teste")
 
     with app.test_client() as client:
         confirmation = client.post("/consultar", data={"email": "MARIA@EMPRESA.COM"})
         token = confirmation.text.split('name="csrf_token" value="', 1)[1].split('"', 1)[0]
-        client.post("/solicitar", data={
+        requested = client.post("/solicitar", data={
             "csrf_token": token,
             "email": "MARIA@EMPRESA.COM",
             "phone": "1111",
             "profile_photo": (_sample_profile_photo(), "rosto.jpg"),
         }, content_type="multipart/form-data")
 
+        assert requested.status_code == 200
+        assert sent_to == []
+        assert notified == ["validador@empresa.com"]
+        with sqlite3.connect(approval_path) as connection:
+            request_id = connection.execute("SELECT request_id FROM signature_requests").fetchone()[0]
+
+        login_page = client.get(f"/admin/login?next=/admin/solicitacoes/{request_id}")
+        login_token = login_page.text.split('name="csrf_token" value="', 1)[1].split('"', 1)[0]
+        login = client.post(
+            f"/admin/login?next=/admin/solicitacoes/{request_id}",
+            data={"username": "roberson.souza", "password": "roberson.souza", "csrf_token": login_token},
+        )
+        assert login.headers["Location"].endswith(f"/admin/solicitacoes/{request_id}")
+        assert client.get("/admin/import").status_code == 403
+        review = client.get(login.headers["Location"])
+        approval_token = review.text.split('name="csrf_token" value="', 1)[1].split('"', 1)[0]
+        approved = client.post(
+            f"/admin/solicitacoes/{request_id}/aprovar",
+            data={"csrf_token": approval_token},
+        )
+        assert approved.status_code == 302
+
     assert sent_to == ["maria@empresa.com"]
+
+
+def test_administrator_can_change_validator_in_admin_panel(tmp_path):
+    database_path = _corporate_database(tmp_path / "corporate.db")
+    approval_path = tmp_path / "approvals.db"
+    app = create_app(test_config={
+        "TESTING": True,
+        "SECRET_KEY": "test-secret",
+        "SHARED_SQLITE_PATH": str(database_path),
+        "SIGNATURE_APPROVALS_PATH": str(approval_path),
+    })
+
+    with app.test_client() as client:
+        login_page = client.get("/admin/login")
+        token = login_page.text.split('name="csrf_token" value="', 1)[1].split('"', 1)[0]
+        client.post("/admin/login", data={"username": "rh", "password": "rh", "csrf_token": token})
+        dashboard = client.get("/admin")
+        assert "Configuração do aprovador" in dashboard.text
+        csrf = dashboard.text.split('name="csrf_token" value="', 1)[1].split('"', 1)[0]
+        saved = client.post("/admin/configuracao/aprovador", data={
+            "csrf_token": csrf,
+            "validator_username": "suporte.dinho",
+            "validator_email": "suporte@empresa.com",
+        })
+        assert saved.status_code == 302
+
+    with app.app_context():
+        settings = get_validator_settings()
+    assert settings["validator_username"] == "suporte.dinho"
+    assert settings["validator_email"] == "suporte@empresa.com"
 
 
 def test_compose_mounts_shared_database_read_only():
@@ -327,6 +389,8 @@ def test_configured_internal_users_authenticate():
     users_path = Path(__file__).resolve().parent.parent / "config" / "users.json"
     assert authenticate_user(users_path, "suporte.dinho", "suporte.dinho")["username"] == "suporte.dinho"
     assert authenticate_user(users_path, "rh", "rh")["username"] == "rh"
+    validator = authenticate_user(users_path, "roberson.souza", "roberson.souza")
+    assert validator["role"] == "Validador de assinaturas"
     assert authenticate_user(users_path, "rh", "senha-incorreta") is None
 
 
@@ -446,8 +510,9 @@ def test_employee_can_update_phone_before_generating_signature(tmp_path, monkeyp
         "SHARED_SQLITE_PATH": str(database_path),
         "REQUEST_LOG_PATH": str(log_path),
         "GENERATED_FILES_PATH": str(tmp_path / "generated"),
+        "SIGNATURE_APPROVALS_PATH": str(tmp_path / "approvals.db"),
     })
-    monkeypatch.setattr("app.routes.send_signature_email", lambda *args, **kwargs: {"status": "simulated"})
+    monkeypatch.setattr("app.routes.send_approval_request_email", lambda *args, **kwargs: {"status": "simulated"})
 
     with app.test_client() as client:
         confirmation = client.post("/consultar", data={"email": "maria@empresa.com"})
@@ -467,8 +532,8 @@ def test_employee_can_update_phone_before_generating_signature(tmp_path, monkeyp
             "profile_photo": (_sample_profile_photo(), "rosto.jpg"),
         }, content_type="multipart/form-data")
         assert sent.status_code == 200
-        assert "maria@empresa.com" in successful_request_emails(log_path)
-        assert not list((tmp_path / "generated").glob("*.png"))
+        assert "maria@empresa.com" not in successful_request_emails(log_path)
+        assert len(list((tmp_path / "generated").glob("*.png"))) == 2
 
     assert database_path.read_bytes() == before
 

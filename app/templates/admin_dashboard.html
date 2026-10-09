@@ -12,9 +12,52 @@
       <button class="button-link secondary" type="submit">Sair</button>
     </form>
   </div>
-  <div class="actions">
+  {% if is_admin_manager %}<div class="actions">
     <a class="button-link secondary" href="{{ url_for('admin_import') }}">Enviar carga pendente</a>
-  </div>
+  </div>{% endif %}
+
+  {% if is_signature_validator %}
+  <h2>Validação de assinaturas</h2>
+  <p>Revise as imagens antes de autorizar o envio ao solicitante.</p>
+  <div class="table-wrapper"><table>
+    <thead><tr><th>Solicitante</th><th>Cargo</th><th>Celular</th><th>Solicitada em</th><th>Status</th><th>Ação</th></tr></thead>
+    <tbody>
+    {% for approval in approval_rows %}
+      <tr>
+        <td>{{ approval['employee_name'] }}<br><small>{{ approval['employee_email'] }}</small></td>
+        <td>{{ approval['job_title'] or '—' }}</td>
+        <td>{{ approval['phone'] or '—' }}</td>
+        <td>{{ approval['created_at'] }}</td>
+        <td><span class="signature-state {{ 'generated' if approval['status'] == 'approved' else 'pending' }}">{{ {'pending': 'Pendente', 'sending': 'Enviando', 'approved': 'Aprovada', 'failed': 'Falha'}[approval['status']] }}</span></td>
+        <td><a class="table-action" href="{{ url_for('admin_signature_request', request_id=approval['request_id']) }}">Revisar</a></td>
+      </tr>
+    {% else %}
+      <tr><td colspan="6">Nenhuma assinatura aguardando validação.</td></tr>
+    {% endfor %}
+    </tbody>
+  </table></div>
+  {% endif %}
+
+  {% if is_admin_manager %}
+  <h2>Configuração do aprovador</h2>
+  <p>O usuário selecionado receberá e validará as próximas solicitações antes do envio ao colaborador.</p>
+  <form class="validator-settings" method="post" action="{{ url_for('admin_validator_settings') }}">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <div>
+      <label for="validator_username">Usuário aprovador</label>
+      <select id="validator_username" name="validator_username" required>
+        {% for user in admin_users %}
+          <option value="{{ user['username'] }}" {{ 'selected' if user['username']|lower == validator_settings['validator_username']|lower else '' }}>{{ user['name'] }} ({{ user['username'] }})</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div>
+      <label for="validator_email">E-mail para notificações</label>
+      <input id="validator_email" name="validator_email" type="email" value="{{ validator_settings['validator_email'] }}" required>
+    </div>
+    <button type="submit">Salvar aprovador</button>
+  </form>
+  <p><small>Última atualização: {{ validator_settings['updated_at'] }} por {{ validator_settings['updated_by'] }}.</small></p>
 
   <h2>Publicação corporativa</h2>
   {% if corporate_status['equalized'] %}
@@ -96,6 +139,7 @@
       <li>Nenhuma solicitação registrada.</li>
     {% endfor %}
   </ul>
+  {% endif %}
 </section>
 <script>
 (() => {

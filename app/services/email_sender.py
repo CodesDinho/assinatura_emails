@@ -1,6 +1,7 @@
 import os
 import smtplib
 from email.message import EmailMessage
+from html import escape
 
 
 def _first_non_empty(*names, default=""):
@@ -77,11 +78,47 @@ def send_signature_email(
         with open(whatsapp_card_path, "rb") as file:
             message.add_attachment(file.read(), maintype="image", subtype="png", filename="imagem-whatsapp.png")
 
+    return _send_message(message, settings)
+
+
+def send_approval_request_email(recipient_email, request_data, approval_url):
+    settings = resolve_smtp_settings()
+    if not settings["host"]:
+        return {"status": "simulated", "message": "E-mail de aprovação simulado; SMTP não configurado."}
+    if settings["username"] and not settings["password"]:
+        return {
+            "status": "error",
+            "code": "smtp_configuration",
+            "message": "SMTP_USERNAME está definido, mas SMTP_PASSWORD está vazio.",
+        }
+
+    employee_name = str(request_data["employee_name"])
+    message = EmailMessage()
+    message["From"] = settings["from_email"]
+    message["To"] = recipient_email
+    message["Subject"] = f"Assinatura aguardando aprovação — {employee_name}"
+    message.set_content(
+        f"A assinatura de {employee_name} está aguardando sua validação.\n\n"
+        f"Revise e aprove em: {approval_url}\n\n"
+        "O e-mail ao solicitante somente será enviado após a aprovação."
+    )
+    message.add_alternative(
+        "<p>A assinatura de <strong>" + escape(employee_name) + "</strong> está aguardando sua validação.</p>"
+        "<p><a href=\"" + escape(approval_url, quote=True) + "\" "
+        "style=\"display:inline-block;padding:12px 18px;background:#154c8c;color:#fff;"
+        "text-decoration:none;border-radius:8px;font-weight:bold\">Revisar e aprovar</a></p>"
+        "<p>O e-mail ao solicitante somente será enviado após a aprovação.</p>",
+        subtype="html",
+    )
+    return _send_message(message, settings)
+
+
+def _send_message(message, settings):
     try:
         if settings["use_ssl"]:
-            smtp = smtplib.SMTP_SSL(smtp_host, settings["port"])
+            smtp = smtplib.SMTP_SSL(settings["host"], settings["port"])
         else:
-            smtp = smtplib.SMTP(smtp_host, settings["port"])
+            smtp = smtplib.SMTP(settings["host"], settings["port"])
 
         if settings["use_tls"] and not settings["use_ssl"]:
             smtp.starttls()
