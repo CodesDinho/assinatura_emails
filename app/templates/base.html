@@ -6,8 +6,14 @@
     <title>{% block title %}Assinatura Corporativa{% endblock %}</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
   </head>
-  <body>
-    <main class="container">
+  <body class="{{ 'admin-body' if session.get('admin_user') and request.endpoint != 'admin_login' else '' }}">
+    {% if session.get('admin_user') and request.endpoint != 'admin_login' %}
+    <div class="admin-shell">
+      {% include '_admin_sidebar.html' %}
+      <main class="admin-content">
+    {% else %}
+      <main class="container">
+    {% endif %}
       {% with messages = get_flashed_messages() %}
         {% if messages %}
           <ul class="flash-list">
@@ -18,6 +24,7 @@
         {% endif %}
       {% endwith %}
       {% block content %}{% endblock %}
-    </main>
+      </main>
+    {% if session.get('admin_user') and request.endpoint != 'admin_login' %}</div>{% endif %}
   </body>
 </html>

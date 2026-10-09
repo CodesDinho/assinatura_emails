@@ -278,6 +278,8 @@ def test_signature_is_sent_to_sqlite_email_only_after_validator_approval(tmp_pat
         assert login.headers["Location"].endswith(f"/admin/solicitacoes/{request_id}")
         assert client.get("/admin/import").status_code == 403
         review = client.get(login.headers["Location"])
+        assert "Aprovar e enviar ao solicitante" in review.text
+        assert "admin-sidebar" in review.text
         approval_token = review.text.split('name="csrf_token" value="', 1)[1].split('"', 1)[0]
         approved = client.post(
             f"/admin/solicitacoes/{request_id}/aprovar",

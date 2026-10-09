@@ -1,0 +1,16 @@
+<aside class="admin-sidebar">
+  <a class="admin-brand" href="{{ url_for('admin_dashboard') }}">Assinaturas</a>
+  <p class="admin-user-name">{{ session['admin_user']['name'] }}<small>{{ session['admin_user']['role'] }}</small></p>
+  <nav aria-label="Menu administrativo">
+    <a class="{{ 'active' if request.endpoint == 'admin_dashboard' else '' }}" href="{{ url_for('admin_dashboard') }}">Início</a>
+    {% if admin_is_validator() %}<a class="{{ 'active' if request.endpoint in ('admin_signature_requests', 'admin_signature_request') else '' }}" href="{{ url_for('admin_signature_requests') }}">Aprovar assinaturas pendentes</a>{% endif %}
+    {% if admin_is_manager() %}
+      <a class="{{ 'active' if request.endpoint == 'admin_users' else '' }}" href="{{ url_for('admin_users') }}">Criar usuário</a>
+      <a class="{{ 'active' if request.endpoint == 'admin_validator_settings' else '' }}" href="{{ url_for('admin_validator_settings') }}">Configuração do aprovador</a>
+      <a class="{{ 'active' if request.endpoint == 'admin_import' else '' }}" href="{{ url_for('admin_import') }}">Cargas pendentes</a>
+      <a class="{{ 'active' if request.endpoint == 'admin_recent_requests' else '' }}" href="{{ url_for('admin_recent_requests') }}">Solicitações recentes</a>
+      <a class="{{ 'active' if request.endpoint in ('admin_collaborators', 'admin_employee_edit') else '' }}" href="{{ url_for('admin_collaborators') }}">Colaboradores</a>
+    {% endif %}
+  </nav>
+  <form class="admin-sidebar-logout" method="post" action="{{ url_for('admin_logout') }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><button type="submit">Sair</button></form>
+</aside>

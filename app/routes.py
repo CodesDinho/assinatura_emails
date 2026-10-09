@@ -141,6 +141,8 @@ def _login_is_blocked(key):
 
 def register_routes(app):
     app.jinja_env.globals["csrf_token"] = _csrf_token
+    app.jinja_env.globals["admin_is_validator"] = _is_signature_validator
+    app.jinja_env.globals["admin_is_manager"] = _is_admin_manager
 
     @app.after_request
     def disable_admin_cache(response):
