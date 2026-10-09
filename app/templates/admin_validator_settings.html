@@ -1,8 +1,10 @@
 {% extends 'base.html' %}
-{% block title %}Configuração do aprovador{% endblock %}
+{% block title %}Configuração dos aprovadores{% endblock %}
 {% block content %}<section class="card">
-  <div class="page-header"><h1>Configuração do aprovador</h1><a class="button-link secondary" href="{{ url_for('admin_dashboard') }}">Voltar ao menu</a></div>
-  <p>O usuário selecionado receberá e validará as próximas solicitações.</p>
-  <form method="post"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><label for="validator_username">Usuário aprovador</label><select id="validator_username" name="validator_username" required>{% for user in admin_users %}<option value="{{ user['username'] }}" data-email="{{ user['email'] }}" {{ 'selected' if user['username']|lower == validator_settings['validator_username']|lower else '' }}>{{ user['name'] }} ({{ user['username'] }})</option>{% endfor %}</select><label for="validator_email">E-mail para notificações</label><input id="validator_email" name="validator_email" type="email" value="{{ validator_settings['validator_email'] }}" required><button type="submit">Salvar aprovador</button></form>
-  <p><small>Última atualização: {{ validator_settings['updated_at'] }} por {{ validator_settings['updated_by'] }}.</small></p>
-</section><script>(()=>{const s=document.getElementById('validator_username'),e=document.getElementById('validator_email');s.addEventListener('change',()=>{const value=s.selectedOptions[0]?.dataset.email;if(value)e.value=value;});})();</script>{% endblock %}
+  <div class="page-header"><h1>Configuração dos aprovadores</h1><a class="button-link secondary" href="{{ url_for('admin_dashboard') }}">Voltar ao menu</a></div>
+  <p>Selecione todos os usuários que podem analisar solicitações. Todos receberão as notificações.</p>
+  <form method="post"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    {% for user in admin_users %}<label class="checkbox-label"><input name="approvers" type="checkbox" value="{{ user['username'] }}" {{ 'checked' if user['is_approver'] else '' }}> {{ user['name'] }} ({{ user['username'] }}) — {{ user['email'] }}</label>{% endfor %}
+    <button type="submit">Salvar aprovadores</button>
+  </form>
+</section>{% endblock %}

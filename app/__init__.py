@@ -59,6 +59,18 @@ def create_app(test_config=None):
     INSTANCE_DIR.mkdir(exist_ok=True)
     register_routes(app)
 
+    # Migra o aprovador único legado sem revogar Roberson: ambos passam a ter
+    # permissões cumulativas no novo modelo.
+    with app.app_context():
+        from app.services.admin_auth import migrate_legacy_permissions
+        from app.services.signature_approval_store import get_validator_settings
+
+        legacy_settings = get_validator_settings()
+        migrate_legacy_permissions(
+            app.config["ADMIN_USERS_PATH"], app.config["ADMIN_USERS_DB_PATH"],
+            legacy_settings["validator_username"].strip().lower(), legacy_settings["validator_email"],
+        )
+
     @app.route("/health")
     def health():
         from app.services.corporate_employee_store import equalization_status

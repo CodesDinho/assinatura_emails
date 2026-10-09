@@ -2,17 +2,28 @@
 {% block title %}Usuários administrativos{% endblock %}
 {% block content %}<section class="card wide-card">
   <div class="page-header"><h1>Usuários administrativos</h1><a class="button-link secondary" href="{{ url_for('admin_dashboard') }}">Voltar ao menu</a></div>
-  <p>Crie um acesso interno. O novo usuário ficará disponível imediatamente na configuração do aprovador.</p>
+  <p>Crie, edite ou exclua acessos. Um usuário pode ser administrador, aprovador ou ambos.</p>
   <form class="admin-user-form" method="post" action="{{ url_for('admin_user_create') }}">
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
     <div><label for="new-username">Usuário</label><input id="new-username" name="username" placeholder="nome.sobrenome" required></div>
     <div><label for="new-name">Nome</label><input id="new-name" name="name" required></div>
     <div><label for="new-email">E-mail</label><input id="new-email" name="email" type="email" required></div>
-    <div><label for="new-role">Perfil</label><select id="new-role" name="role" required><option value="Validador de assinaturas">Validador de assinaturas</option><option value="Administrador">Administrador</option></select></div>
     <div><label for="new-password">Senha inicial</label><input id="new-password" name="password" type="password" minlength="10" autocomplete="new-password" required></div>
-    <label class="checkbox-label"><input name="make_validator" type="checkbox" value="1"> Definir como aprovador atual</label><button type="submit">Criar usuário</button>
+    <label class="checkbox-label"><input name="is_admin" type="checkbox" value="1"> Administrador</label>
+    <label class="checkbox-label"><input name="is_approver" type="checkbox" value="1"> Aprovador</label>
+    <button type="submit">Criar usuário</button>
   </form>
-  <div class="table-wrapper"><table id="admin-users-table"><thead><tr><th>Nome</th><th>Usuário</th><th>E-mail</th><th>Perfil</th><th>Aprovador atual</th></tr></thead><tbody>
-  {% for user in admin_users %}<tr><td>{{ user['name'] }}</td><td>{{ user['username'] }}</td><td>{{ user['email'] or '—' }}</td><td>{{ user['role'] }}</td><td><span class="signature-state {{ 'generated' if user['username']|lower == validator_settings['validator_username']|lower else 'pending' }}">{{ 'Sim' if user['username']|lower == validator_settings['validator_username']|lower else 'Não' }}</span></td></tr>{% else %}<tr><td colspan="5">Nenhum usuário administrativo ativo.</td></tr>{% endfor %}
+  <div class="table-wrapper"><table id="admin-users-table"><thead><tr><th>Usuário</th><th>Cadastro e permissões</th><th>Ações</th></tr></thead><tbody>
+  {% for user in admin_users %}<tr><td><strong>{{ user['username'] }}</strong></td><td>
+    <form class="admin-user-edit-form" method="post" action="{{ url_for('admin_user_edit', username=user['username']) }}">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <input aria-label="Nome de {{ user['username'] }}" name="name" value="{{ user['name'] }}" required>
+      <input aria-label="E-mail de {{ user['username'] }}" name="email" type="email" value="{{ user['email'] }}" required>
+      <input aria-label="Nova senha de {{ user['username'] }}" name="password" type="password" minlength="10" placeholder="Nova senha (opcional)" autocomplete="new-password">
+      <label class="checkbox-label"><input name="is_admin" type="checkbox" value="1" {{ 'checked' if user['is_admin'] else '' }}> Administrador</label>
+      <label class="checkbox-label"><input name="is_approver" type="checkbox" value="1" {{ 'checked' if user['is_approver'] else '' }}> Aprovador</label>
+      <button class="table-action" type="submit">Salvar</button>
+    </form></td><td><form method="post" action="{{ url_for('admin_user_delete', username=user['username']) }}" onsubmit="return confirm('Excluir o usuário {{ user['username'] }}?');"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><button class="table-action danger" type="submit">Excluir</button></form></td></tr>
+  {% else %}<tr><td colspan="3">Nenhum usuário administrativo ativo.</td></tr>{% endfor %}
   </tbody></table></div>
 </section>{% endblock %}

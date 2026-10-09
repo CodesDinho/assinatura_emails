@@ -7,7 +7,9 @@ from pathlib import Path
 from flask import abort, current_app, flash, redirect, render_template, request, send_file, session, url_for
 from werkzeug.security import check_password_hash
 
-from app.services.admin_auth import authenticate_user, create_admin_user, list_active_users
+from app.services.admin_auth import (
+    authenticate_user, create_admin_user, delete_admin_user, list_active_users, update_admin_user,
+)
 from app.services.email_sender import send_approval_request_email, send_rejection_email, send_signature_email
 from app.services.employee_importer import (
     build_employee_record,
@@ -79,16 +81,12 @@ def _admin_login_required(view_func):
 
 def _is_signature_validator():
     user = session.get("admin_user") or {}
-    expected = get_validator_settings()["validator_username"]
-    return str(user.get("username", "")).strip().lower() == str(expected).strip().lower()
+    return bool(user.get("is_approver"))
 
 
 def _is_admin_manager():
     user = session.get("admin_user") or {}
-    return (
-        str(user.get("role", "")).strip().lower() == "administrador"
-        or _is_signature_validator()
-    )
+    return bool(user.get("is_admin"))
 
 
 def _signature_validator_required(view_func):
@@ -102,7 +100,7 @@ def _signature_validator_required(view_func):
             session["login_next"] = next_url
             flash(
                 "Entre com o aprovador atual para acessar esta solicitação: "
-                f"{validator['validator_username']}."
+                f"{validator['validator_username']}. Também é possível entrar com outro usuário aprovador."
             )
             return redirect(url_for("admin_login", next=next_url))
         return view_func(*args, **kwargs)
@@ -270,8 +268,15 @@ def register_routes(app):
             approval_url = current_app.config["APP_BASE_URL"].rstrip("/") + url_for(
                 "admin_signature_request", request_id=request_id
             )
-            validator = get_validator_settings()
-            notification = send_approval_request_email(validator["validator_email"], approval, approval_url)
+            legacy_settings = get_validator_settings()
+            approvers = [item for item in list_active_users(
+                current_app.config["ADMIN_USERS_PATH"], current_app.config["ADMIN_USERS_DB_PATH"]
+            ) if item["is_approver"] and item["email"]]
+            notification = send_approval_request_email(
+                ", ".join(legacy_settings["validator_email"]
+                           if item["username"].lower() == legacy_settings["validator_username"].lower()
+                           else item["email"] for item in approvers), approval, approval_url
+            )
             detail = "aguardando aprovação"
             if notification.get("status") not in {"sent", "simulated"}:
                 detail += f"; notificação falhou: {notification.get('message', 'erro desconhecido')}"
@@ -310,7 +315,8 @@ def register_routes(app):
             )
             expected_hash = current_app.config.get("ADMIN_PASSWORD_HASH") or ""
             if not user and username == current_app.config.get("ADMIN_USERNAME") and expected_hash and check_password_hash(expected_hash, password):
-                user = {"username": username, "name": username, "role": "Administrador"}
+                user = {"username": username, "name": username, "role": "Administrador",
+                        "is_admin": True, "is_approver": False}
             if user:
                 saved_next = request.form.get("next", "") or request.args.get("next", "") or session.get("login_next", "")
                 session.clear()
@@ -368,7 +374,6 @@ def register_routes(app):
     def admin_users():
         return render_template(
             "admin_users.html",
-            validator_settings=get_validator_settings(),
             admin_users=list_active_users(
                 current_app.config["ADMIN_USERS_PATH"], current_app.config["ADMIN_USERS_DB_PATH"]
             ),
@@ -397,8 +402,11 @@ def register_routes(app):
         name = normalize_text(request.form.get("name"))
         email = normalize_email(request.form.get("email"))
         password = request.form.get("password", "")
-        role = request.form.get("role", "")
-        make_validator = request.form.get("make_validator") == "1"
+        legacy_role = request.form.get("role", "")
+        is_admin = request.form.get("is_admin") == "1" or legacy_role == "Administrador"
+        is_approver = (request.form.get("is_approver") == "1"
+                       or request.form.get("make_validator") == "1"
+                       or legacy_role == "Validador de assinaturas")
         if not re.fullmatch(r"[a-z0-9._-]{3,64}", username):
             flash("O usuário deve ter de 3 a 64 caracteres: letras minúsculas, números, ponto, hífen ou sublinhado.")
             return redirect(url_for("admin_users"))
@@ -408,8 +416,8 @@ def register_routes(app):
         if len(password) < 10:
             flash("A senha inicial deve ter pelo menos 10 caracteres.")
             return redirect(url_for("admin_users"))
-        if role not in {"Administrador", "Validador de assinaturas"}:
-            flash("Selecione um perfil válido.")
+        if not (is_admin or is_approver):
+            flash("Selecione pelo menos uma permissão.")
             return redirect(url_for("admin_users"))
         try:
             create_admin_user(
@@ -418,16 +426,62 @@ def register_routes(app):
                 username,
                 name,
                 email,
-                role,
+                "Administrador" if is_admin else "Validador de assinaturas",
                 password,
-                session["admin_user"]["username"],
+                session["admin_user"]["username"], is_admin=is_admin, is_approver=is_approver,
             )
         except ValueError as exc:
             flash(str(exc))
             return redirect(url_for("admin_dashboard"))
-        if make_validator:
+        if request.form.get("make_validator") == "1":
             save_validator_settings(username, email, session["admin_user"]["username"])
-        flash(f"Usuário {username} criado com sucesso." + (" Ele agora é o aprovador." if make_validator else ""))
+        flash(f"Usuário {username} criado com sucesso.")
+        return redirect(url_for("admin_users"))
+
+    @app.route("/admin/usuarios/<username>/editar", methods=["POST"])
+    @_admin_manager_required
+    def admin_user_edit(username):
+        if not _valid_csrf():
+            flash("A sessão expirou. O usuário não foi alterado.")
+            return redirect(url_for("admin_users"))
+        name = normalize_text(request.form.get("name"))
+        email = normalize_email(request.form.get("email"))
+        password = request.form.get("password", "")
+        is_admin = request.form.get("is_admin") == "1"
+        is_approver = request.form.get("is_approver") == "1"
+        if not name or not email or "@" not in email or not (is_admin or is_approver):
+            flash("Informe nome, e-mail e ao menos uma permissão.")
+            return redirect(url_for("admin_users"))
+        if password and len(password) < 10:
+            flash("A nova senha deve ter pelo menos 10 caracteres.")
+            return redirect(url_for("admin_users"))
+        try:
+            update_admin_user(current_app.config["ADMIN_USERS_PATH"], current_app.config["ADMIN_USERS_DB_PATH"],
+                              username.lower(), name, email, password, is_admin, is_approver)
+        except ValueError as exc:
+            flash(str(exc))
+        else:
+            if username.lower() == session["admin_user"]["username"].lower():
+                session["admin_user"].update(name=name,
+                    role="Administrador" if is_admin else "Validador de assinaturas",
+                    is_admin=is_admin, is_approver=is_approver)
+            flash(f"Usuário {username} atualizado com sucesso.")
+        return redirect(url_for("admin_users"))
+
+    @app.route("/admin/usuarios/<username>/excluir", methods=["POST"])
+    @_admin_manager_required
+    def admin_user_delete(username):
+        if not _valid_csrf():
+            flash("A sessão expirou. O usuário não foi excluído.")
+        elif username.lower() == session["admin_user"]["username"].lower():
+            flash("Você não pode excluir o usuário da própria sessão.")
+        else:
+            try:
+                delete_admin_user(current_app.config["ADMIN_USERS_PATH"],
+                                  current_app.config["ADMIN_USERS_DB_PATH"], username.lower())
+                flash(f"Usuário {username} excluído com sucesso.")
+            except ValueError as exc:
+                flash(str(exc))
         return redirect(url_for("admin_users"))
 
     @app.route("/admin/configuracao/aprovador", methods=["GET", "POST"])
@@ -436,7 +490,6 @@ def register_routes(app):
         if request.method == "GET":
             return render_template(
                 "admin_validator_settings.html",
-                validator_settings=get_validator_settings(),
                 admin_users=list_active_users(
                     current_app.config["ADMIN_USERS_PATH"], current_app.config["ADMIN_USERS_DB_PATH"]
                 ),
@@ -444,19 +497,27 @@ def register_routes(app):
         if not _valid_csrf():
             flash("A sessão expirou. O aprovador não foi alterado.")
             return redirect(url_for("admin_validator_settings"))
-        username = normalize_text(request.form.get("validator_username")).lower()
-        email = normalize_email(request.form.get("validator_email"))
         active_users = list_active_users(
             current_app.config["ADMIN_USERS_PATH"], current_app.config["ADMIN_USERS_DB_PATH"]
         )
-        if not any(item["username"].lower() == username for item in active_users):
-            flash("Selecione um usuário interno ativo para ser o aprovador.")
+        selected = set(request.form.getlist("approvers"))
+        legacy_username = normalize_text(request.form.get("validator_username")).lower()
+        if legacy_username:
+            selected.add(legacy_username)
+            selected.update(item["username"] for item in active_users if item["is_approver"])
+        if not selected or not selected.issubset({item["username"] for item in active_users}):
+            flash("Selecione ao menos um aprovador válido.")
             return redirect(url_for("admin_validator_settings"))
-        if not email or "@" not in email:
-            flash("Informe um e-mail válido para o aprovador.")
-            return redirect(url_for("admin_validator_settings"))
-        save_validator_settings(username, email, session["admin_user"]["username"])
-        flash(f"Aprovador atualizado para {username} ({email}).")
+        for item in active_users:
+            update_admin_user(current_app.config["ADMIN_USERS_PATH"], current_app.config["ADMIN_USERS_DB_PATH"],
+                              item["username"], item["name"], item["email"], "",
+                              bool(item["is_admin"]), item["username"] in selected)
+        pointer_username = legacy_username or sorted(selected)[0]
+        pointer_user = next(item for item in active_users if item["username"] == pointer_username)
+        save_validator_settings(pointer_username,
+            normalize_email(request.form.get("validator_email")) or pointer_user["email"],
+            session["admin_user"]["username"])
+        flash("Aprovadores atualizados com sucesso.")
         return redirect(url_for("admin_validator_settings"))
 
     @app.route("/admin/solicitacoes/<request_id>")
