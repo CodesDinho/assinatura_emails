@@ -10,7 +10,14 @@ from app.services.whatsapp_card_generator import generate_whatsapp_card
 from app.services.text_formatting import format_job_title, format_person_name
 from app.services.admin_auth import authenticate_user
 from app.services.request_log import append_request_log, successful_request_emails
-from app.services.signature_approval_store import get_validator_settings, save_validator_settings
+from app.services.signature_approval_store import (
+    create_signature_request,
+    delete_signature_request,
+    get_signature_request,
+    get_validator_settings,
+    reject_signature_request,
+    save_validator_settings,
+)
 from app.services.workbook_store import (
     find_employee_by_email,
     list_employees,
@@ -276,9 +283,11 @@ def test_signature_is_sent_to_sqlite_email_only_after_validator_approval(tmp_pat
             data={"username": "roberson.souza", "password": "roberson.souza", "csrf_token": login_token},
         )
         assert login.headers["Location"].endswith(f"/admin/solicitacoes/{request_id}")
-        assert client.get("/admin/import").status_code == 403
+        assert client.get("/admin/import").status_code == 200
         review = client.get(login.headers["Location"])
         assert "Aprovar e enviar ao solicitante" in review.text
+        assert "Não aprovar" in review.text
+        assert "Excluir solicitação" in review.text
         assert "admin-sidebar" in review.text
         approval_token = review.text.split('name="csrf_token" value="', 1)[1].split('"', 1)[0]
         approved = client.post(
@@ -288,6 +297,20 @@ def test_signature_is_sent_to_sqlite_email_only_after_validator_approval(tmp_pat
         assert approved.status_code == 302
 
     assert sent_to == ["maria@empresa.com"]
+
+
+def test_validator_can_reject_and_delete_request(tmp_path):
+    app = create_app(test_config={
+        "TESTING": True,
+        "SIGNATURE_APPROVALS_PATH": str(tmp_path / "approvals.db"),
+    })
+    employee = {"email": "maria@empresa.com", "full_name": "Maria", "job_title": "Analista", "phone": "1111"}
+    with app.app_context():
+        create_signature_request("pedido", employee, tmp_path / "assinatura.png", tmp_path / "whatsapp.png")
+        assert reject_signature_request("pedido", "roberson.souza") is True
+        assert get_signature_request("pedido")["status"] == "rejected"
+        assert delete_signature_request("pedido") is True
+        assert get_signature_request("pedido") is None
 
 
 def test_administrator_can_change_validator_in_admin_panel(tmp_path):

@@ -169,3 +169,25 @@ def fail_signature_request(request_id, message):
             """,
             (str(message or "Falha ao enviar")[:500], request_id),
         )
+
+
+def reject_signature_request(request_id, reviewer):
+    reviewed_at = datetime.now(timezone.utc).isoformat()
+    with _connection() as connection:
+        cursor = connection.execute(
+            """
+            UPDATE signature_requests
+            SET status = 'rejected', reviewed_at = ?, reviewed_by = ?, error_message = ''
+            WHERE request_id = ? AND status IN ('pending', 'failed')
+            """,
+            (reviewed_at, reviewer, request_id),
+        )
+    return cursor.rowcount == 1
+
+
+def delete_signature_request(request_id):
+    with _connection() as connection:
+        cursor = connection.execute(
+            "DELETE FROM signature_requests WHERE request_id = ?", (request_id,)
+        )
+    return cursor.rowcount == 1

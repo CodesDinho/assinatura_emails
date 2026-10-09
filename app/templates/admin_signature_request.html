@@ -23,13 +23,14 @@
       </figure>
     </div>
     {% if approval['error_message'] %}<p class="error">Última tentativa: {{ approval['error_message'] }}</p>{% endif %}
-    <form method="post" action="{{ url_for('admin_signature_approve', request_id=approval['request_id']) }}" onsubmit="return confirm('Aprovar e enviar estas imagens para {{ approval['employee_email'] }}?');">
-      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-      <button type="submit">Aprovar e enviar ao solicitante</button>
-    </form>
+    <div class="approval-actions">
+      <form method="post" action="{{ url_for('admin_signature_approve', request_id=approval['request_id']) }}" onsubmit="return confirm('Aprovar e enviar estas imagens para {{ approval['employee_email'] }}?');"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><button type="submit">Aprovar e enviar ao solicitante</button></form>
+      <form method="post" action="{{ url_for('admin_signature_reject', request_id=approval['request_id']) }}" onsubmit="return confirm('Rejeitar esta solicitação sem enviar e-mail ao solicitante?');"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><button class="danger-button" type="submit">Não aprovar</button></form>
+    </div>
   {% else %}
     <p>Esta solicitação está com status <strong>{{ approval['status'] }}</strong>.</p>
     {% if approval['reviewed_by'] %}<p>Validada por {{ approval['reviewed_by'] }} em {{ approval['reviewed_at'] }}.</p>{% endif %}
   {% endif %}
+  <form class="delete-request-form" method="post" action="{{ url_for('admin_signature_delete', request_id=approval['request_id']) }}" onsubmit="return confirm('Excluir definitivamente esta solicitação?');"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><button class="table-action danger" type="submit">Excluir solicitação</button></form>
 </section>
 {% endblock %}

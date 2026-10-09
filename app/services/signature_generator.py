@@ -33,6 +33,20 @@ def _fit_font(draw, text, max_width, start_size, min_size):
     return _font(min_size)
 
 
+def _draw_smooth_text(image, position, text, font_size, fill, scale=4):
+    """Supersample small text so digits remain legible in the compact signature."""
+    layer = Image.new("RGBA", (image.width * scale, image.height * scale), (0, 0, 0, 0))
+    draw = ImageDraw.Draw(layer)
+    draw.text(
+        (position[0] * scale, position[1] * scale),
+        text,
+        font=_font(font_size * scale),
+        fill=fill + (255,),
+    )
+    layer = layer.resize(image.size, Image.Resampling.LANCZOS)
+    image.alpha_composite(layer)
+
+
 def _asset(name):
     return Image.open(ART_DIR / name).convert("RGBA")
 
@@ -85,7 +99,6 @@ def generate_signature_image(name, role, email, output_path, phone=""):
     role_font = _fit_font(draw, role, 280, 12, 9)
     email_font = _fit_font(draw, email, 260, 8, 6)
     detail_font = _font(8)
-    phone_font = _fit_font(draw, phone, 235, 10, 8) if phone else None
 
     # Positions, colors and relative sizes converted from the PPTX EMU coordinates.
     draw.text((246, 22), name, font=name_font, fill=BRAND_BLUE)
@@ -95,7 +108,12 @@ def generate_signature_image(name, role, email, output_path, phone=""):
     draw.text((270, 91), email, font=email_font, fill=SECONDARY_TEXT)
     draw.text((270, 117), "www.dinhodistribuidora.com.br", font=detail_font, fill=SECONDARY_TEXT)
     if phone:
-        draw.text((270, 141), phone, font=phone_font, fill=SECONDARY_TEXT)
+        phone_size = 10
+        while phone_size > 8:
+            if _font(phone_size).getbbox(phone)[2] <= 235:
+                break
+            phone_size -= 1
+        _draw_smooth_text(image, (270, 141), phone, phone_size, SECONDARY_TEXT)
 
     image.convert("RGB").save(output, format="PNG", optimize=True)
     return output

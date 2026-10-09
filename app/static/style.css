@@ -149,6 +149,10 @@ button:disabled { cursor: wait; opacity: 0.72; }
 .admin-sidebar-logout button { margin: 20px 0 0; border: 1px solid #53658e; background: transparent; }
 .admin-content { min-width: 0; padding: 32px; }
 .admin-content > .card { max-width: 1440px; margin: 0 auto; }
+.approval-actions { display: flex; gap: 12px; }
+.approval-actions form { flex: 1; }
+.danger-button { background: #a32929; }
+.delete-request-form { margin-top: 20px; }
 .approval-preview-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 24px; margin: 24px 0; }
 .approval-preview-grid figure { margin: 0; padding: 16px; border: 1px solid #e3e7ed; border-radius: 10px; background: #f8fafc; }
 .approval-preview-grid figcaption { margin-bottom: 12px; font-weight: bold; }

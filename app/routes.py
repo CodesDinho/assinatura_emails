@@ -32,10 +32,12 @@ from app.services.signature_approval_store import (
     claim_signature_request,
     complete_signature_request,
     create_signature_request,
+    delete_signature_request,
     fail_signature_request,
     get_signature_request,
     get_validator_settings,
     list_signature_requests,
+    reject_signature_request,
     save_validator_settings,
 )
 from app.services.whatsapp_card_generator import InvalidProfilePhoto, generate_whatsapp_card
@@ -83,7 +85,10 @@ def _is_signature_validator():
 
 def _is_admin_manager():
     user = session.get("admin_user") or {}
-    return str(user.get("role", "")).strip().lower() == "administrador"
+    return (
+        str(user.get("role", "")).strip().lower() == "administrador"
+        or _is_signature_validator()
+    )
 
 
 def _signature_validator_required(view_func):
@@ -512,6 +517,41 @@ def register_routes(app):
             except OSError:
                 pass
         flash(f"Assinatura de {approval['employee_name']} aprovada e enviada.")
+        return redirect(url_for("admin_signature_requests"))
+
+    @app.route("/admin/solicitacoes/<request_id>/rejeitar", methods=["POST"])
+    @_signature_validator_required
+    def admin_signature_reject(request_id):
+        if not _valid_csrf():
+            flash("A sessão expirou. A solicitação não foi rejeitada.")
+            return redirect(url_for("admin_signature_request", request_id=request_id))
+        approval = get_signature_request(request_id)
+        if not approval:
+            abort(404)
+        reviewer = session["admin_user"]["username"]
+        if not reject_signature_request(request_id, reviewer):
+            flash("Esta solicitação já foi processada.")
+            return redirect(url_for("admin_signature_request", request_id=request_id))
+        for path_value in (approval["signature_path"], approval["whatsapp_path"]):
+            Path(path_value).unlink(missing_ok=True)
+        _log_request(approval["employee_email"], "rejected", f"rejeitada por {reviewer}")
+        flash(f"Solicitação de {approval['employee_name']} rejeitada. Nenhum e-mail foi enviado.")
+        return redirect(url_for("admin_signature_requests"))
+
+    @app.route("/admin/solicitacoes/<request_id>/excluir", methods=["POST"])
+    @_signature_validator_required
+    def admin_signature_delete(request_id):
+        if not _valid_csrf():
+            flash("A sessão expirou. A solicitação não foi excluída.")
+            return redirect(url_for("admin_signature_request", request_id=request_id))
+        approval = get_signature_request(request_id)
+        if not approval:
+            abort(404)
+        for path_value in (approval["signature_path"], approval["whatsapp_path"]):
+            Path(path_value).unlink(missing_ok=True)
+        delete_signature_request(request_id)
+        _log_request(approval["employee_email"], "deleted", f"excluída por {session['admin_user']['username']}")
+        flash(f"Solicitação de {approval['employee_name']} excluída.")
         return redirect(url_for("admin_signature_requests"))
 
     @app.route("/admin/colaboradores/novo", methods=["GET", "POST"])
