@@ -60,7 +60,7 @@ def _read_profile_photo(uploaded_file):
     return ImageOps.exif_transpose(image).convert("RGB")
 
 
-def _cover_photo(image, size):
+def _cover_photo(image, size, focus_x=0.5, focus_y=0.33, zoom=1.0):
     target_width, target_height = size
     source_ratio = image.width / image.height
     target_ratio = target_width / target_height
@@ -70,13 +70,20 @@ def _cover_photo(image, size):
     else:
         resized_width = target_width
         resized_height = round(resized_width / source_ratio)
+    zoom = min(2.5, max(1.0, float(zoom)))
+    resized_width = max(target_width, round(resized_width * zoom))
+    resized_height = max(target_height, round(resized_height * zoom))
     image = image.resize((resized_width, resized_height), Image.Resampling.LANCZOS)
-    left = max(0, (resized_width - target_width) // 2)
-    top = max(0, (resized_height - target_height) // 3)
+    focus_x = min(1.0, max(0.0, float(focus_x)))
+    focus_y = min(1.0, max(0.0, float(focus_y)))
+    left = round((resized_width - target_width) * focus_x)
+    top = round((resized_height - target_height) * focus_y)
     return image.crop((left, top, left + target_width, top + target_height))
 
 
-def generate_whatsapp_card(name, role, uploaded_photo, output_path):
+def generate_whatsapp_card(
+    name, role, uploaded_photo, output_path, *, focus_x=0.5, focus_y=0.33, zoom=1.0
+):
     """Create the companion WhatsApp card without retaining the uploaded photo."""
     if not MODEL_PATH.exists():
         raise FileNotFoundError(f"Modelo do WhatsApp não encontrado: {MODEL_PATH}")
@@ -100,7 +107,7 @@ def generate_whatsapp_card(name, role, uploaded_photo, output_path):
 
     left, top, right, bottom = PHOTO_BOX
     photo_size = (right - left, bottom - top)
-    profile = _cover_photo(profile, photo_size)
+    profile = _cover_photo(profile, photo_size, focus_x=focus_x, focus_y=focus_y, zoom=zoom)
     mask = Image.new("L", photo_size, 0)
     ImageDraw.Draw(mask).ellipse((0, 0, photo_size[0] - 1, photo_size[1] - 1), fill=255)
     card.paste(profile, (left, top), mask)

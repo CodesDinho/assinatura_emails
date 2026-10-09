@@ -124,6 +124,13 @@ button:disabled { cursor: wait; opacity: 0.72; }
 .admin-user-form { display: grid; grid-template-columns: repeat(3, minmax(180px, 1fr)); align-items: end; gap: 12px; margin-bottom: 28px; }
 .admin-user-form input, .admin-user-form select, .admin-user-form button { margin-bottom: 0; }
 .admin-user-form .checkbox-label { align-self: center; margin: 0; }
+.photo-editor { margin: 18px 0; padding: 18px; border: 1px solid #dbe3ec; border-radius: 10px; background: #f8fafc; }
+.photo-editor > p { margin-top: 0; text-align: center; }
+.photo-preview { position: relative; width: 245px; height: 245px; max-width: 100%; margin: 0 auto 18px; overflow: hidden; border: 4px solid #fff; border-radius: 50%; background: #11183a; box-shadow: 0 0 0 2px #344582; }
+.photo-preview img { position: absolute; display: block; max-width: none; }
+.photo-controls { display: grid; grid-template-columns: 190px minmax(180px, 1fr); align-items: center; gap: 4px 14px; }
+.photo-controls label, .photo-controls input { margin: 0; }
+.photo-confirmation { justify-content: center; margin-top: 18px; }
 .approval-preview-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 24px; margin: 24px 0; }
 .approval-preview-grid figure { margin: 0; padding: 16px; border: 1px solid #e3e7ed; border-radius: 10px; background: #f8fafc; }
 .approval-preview-grid figcaption { margin-bottom: 12px; font-weight: bold; }
@@ -134,4 +141,5 @@ button:disabled { cursor: wait; opacity: 0.72; }
   .approval-preview-grid { grid-template-columns: 1fr; }
   .validator-settings { grid-template-columns: 1fr; }
   .admin-user-form { grid-template-columns: 1fr; }
+  .photo-controls { grid-template-columns: 1fr; gap: 6px; }
 }

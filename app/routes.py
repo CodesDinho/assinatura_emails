@@ -214,6 +214,21 @@ def register_routes(app):
                 employee=employee,
                 photo_error="Selecione uma foto do seu rosto para gerar a imagem do WhatsApp.",
             ), 400
+        if request.form.get("photo_confirmed") != "1":
+            return render_template(
+                "confirm.html",
+                employee=employee,
+                photo_error="Ajuste a foto e confirme que o enquadramento está correto.",
+            ), 400
+
+        try:
+            photo_focus_x = min(1.0, max(0.0, float(request.form.get("photo_focus_x", "50")) / 100))
+            photo_focus_y = min(1.0, max(0.0, float(request.form.get("photo_focus_y", "33")) / 100))
+            photo_zoom = min(2.5, max(1.0, float(request.form.get("photo_zoom", "100")) / 100))
+        except (TypeError, ValueError):
+            return render_template(
+                "confirm.html", employee=employee, photo_error="O enquadramento informado não é válido. Selecione a foto novamente."
+            ), 400
 
         signature_path = None
         whatsapp_card_path = None
@@ -227,7 +242,13 @@ def register_routes(app):
             generate_signature_image(employee["full_name"], employee["job_title"], email, signature_path, phone=employee.get("phone", ""))
             try:
                 generate_whatsapp_card(
-                    employee["full_name"], employee["job_title"], uploaded_photo, whatsapp_card_path
+                    employee["full_name"],
+                    employee["job_title"],
+                    uploaded_photo,
+                    whatsapp_card_path,
+                    focus_x=photo_focus_x,
+                    focus_y=photo_focus_y,
+                    zoom=photo_zoom,
                 )
             except InvalidProfilePhoto as exc:
                 signature_path.unlink(missing_ok=True)

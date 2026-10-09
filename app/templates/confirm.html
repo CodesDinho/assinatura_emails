@@ -23,8 +23,21 @@
     <input id="profile_photo" name="profile_photo" type="file" accept="image/jpeg,image/png,image/webp" required aria-describedby="photo-help{% if photo_error %} photo-error{% endif %}">
     <small id="photo-help" class="field-help">Use uma foto nítida, de frente e com o rosto centralizado. Formatos JPG, PNG ou WEBP, até 8 MB. A foto é usada somente para gerar a imagem e não fica armazenada.</small>
     {% if photo_error %}<p id="photo-error" class="field-error">{{ photo_error }}</p>{% endif %}
-    <button id="signature-submit" type="submit">Solicitar validação da assinatura</button>
-    <p id="processing-status" class="processing-status" role="status" aria-live="polite" hidden>Processando as imagens e enviando o e-mail… Aguarde.</p>
+    <div id="photo-editor" class="photo-editor" hidden>
+      <p><strong>Ajuste a foto dentro da moldura</strong></p>
+      <div id="photo-preview" class="photo-preview"><img id="photo-preview-image" alt="Prévia do enquadramento da foto"></div>
+      <div class="photo-controls">
+        <label for="photo-focus-x">Mover para os lados</label>
+        <input id="photo-focus-x" name="photo_focus_x" type="range" min="0" max="100" value="50">
+        <label for="photo-focus-y">Mover para cima ou para baixo</label>
+        <input id="photo-focus-y" name="photo_focus_y" type="range" min="0" max="100" value="33">
+        <label for="photo-zoom">Zoom</label>
+        <input id="photo-zoom" name="photo_zoom" type="range" min="100" max="250" value="100">
+      </div>
+      <label class="checkbox-label photo-confirmation"><input id="photo-confirmed" name="photo_confirmed" type="checkbox" value="1" required> O enquadramento está correto</label>
+    </div>
+    <button id="signature-submit" type="submit" disabled>Solicitar validação da assinatura</button>
+    <p id="processing-status" class="processing-status" role="status" aria-live="polite" hidden>Gerando as imagens e enviando para validação… Aguarde.</p>
   </form>
 </section>
 <script>
@@ -32,7 +45,50 @@
   const form = document.getElementById('signature-request-form');
   const button = document.getElementById('signature-submit');
   const status = document.getElementById('processing-status');
-  form.addEventListener('submit', () => {
+  const fileInput = document.getElementById('profile_photo');
+  const editor = document.getElementById('photo-editor');
+  const preview = document.getElementById('photo-preview');
+  const image = document.getElementById('photo-preview-image');
+  const focusX = document.getElementById('photo-focus-x');
+  const focusY = document.getElementById('photo-focus-y');
+  const zoom = document.getElementById('photo-zoom');
+  const confirmed = document.getElementById('photo-confirmed');
+  let objectUrl = '';
+
+  const updatePreview = () => {
+    if (!image.naturalWidth) return;
+    const size = preview.clientWidth;
+    const scale = Math.max(size / image.naturalWidth, size / image.naturalHeight) * (Number(zoom.value) / 100);
+    const width = image.naturalWidth * scale;
+    const height = image.naturalHeight * scale;
+    image.style.width = `${width}px`;
+    image.style.height = `${height}px`;
+    image.style.left = `${-(width - size) * (Number(focusX.value) / 100)}px`;
+    image.style.top = `${-(height - size) * (Number(focusY.value) / 100)}px`;
+    confirmed.checked = false;
+    button.disabled = true;
+  };
+
+  fileInput.addEventListener('change', () => {
+    if (objectUrl) URL.revokeObjectURL(objectUrl);
+    const file = fileInput.files[0];
+    if (!file) {
+      editor.hidden = true;
+      button.disabled = true;
+      return;
+    }
+    objectUrl = URL.createObjectURL(file);
+    image.onload = () => { editor.hidden = false; updatePreview(); };
+    image.src = objectUrl;
+  });
+  [focusX, focusY, zoom].forEach((control) => control.addEventListener('input', updatePreview));
+  confirmed.addEventListener('change', () => { button.disabled = !confirmed.checked; });
+
+  form.addEventListener('submit', (event) => {
+    if (!confirmed.checked) {
+      event.preventDefault();
+      return;
+    }
     button.disabled = true;
     button.textContent = 'Processando…';
     status.hidden = false;

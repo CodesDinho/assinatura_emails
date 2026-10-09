@@ -259,6 +259,7 @@ def test_signature_is_sent_to_sqlite_email_only_after_validator_approval(tmp_pat
             "csrf_token": token,
             "email": "MARIA@EMPRESA.COM",
             "phone": "1111",
+            "photo_confirmed": "1",
             "profile_photo": (_sample_profile_photo(), "rosto.jpg"),
         }, content_type="multipart/form-data")
 
@@ -582,6 +583,10 @@ def test_employee_can_update_phone_before_generating_signature(tmp_path, monkeyp
         assert confirmation.status_code == 200
         assert 'name="phone"' in confirmation.text
         assert 'name="profile_photo"' in confirmation.text
+        assert 'name="photo_focus_x"' in confirmation.text
+        assert 'name="photo_focus_y"' in confirmation.text
+        assert 'name="photo_zoom"' in confirmation.text
+        assert 'name="photo_confirmed"' in confirmation.text
         assert 'enctype="multipart/form-data"' in confirmation.text
         assert 'id="processing-status"' in confirmation.text
         assert "Processando…" in confirmation.text
@@ -592,6 +597,7 @@ def test_employee_can_update_phone_before_generating_signature(tmp_path, monkeyp
             "csrf_token": token,
             "email": "maria@empresa.com",
             "phone": "+55 41 99999-0000",
+            "photo_confirmed": "1",
             "profile_photo": (_sample_profile_photo(), "rosto.jpg"),
         }, content_type="multipart/form-data")
         assert sent.status_code == 200
