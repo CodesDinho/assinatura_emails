@@ -357,6 +357,7 @@ def register_routes(app):
         generated_emails = successful_request_emails(current_app.config["REQUEST_LOG_PATH"])
         for employee in rows:
             employee["signature_generated"] = employee["email"] in generated_emails
+        duplicate_email_count = sum(1 for employee in rows if employee["duplicate_email"])
         return render_template(
             "admin_collaborators.html",
             employees=rows,
@@ -365,6 +366,7 @@ def register_routes(app):
             inactive=len(rows) - summary["active"],
             ready=summary["ready"],
             missing_email=summary["missing_email"],
+            duplicate_email_count=duplicate_email_count,
             corporate_status=status,
             lorac_coverage=lorac,
         )
@@ -711,6 +713,64 @@ def register_routes(app):
             f"Registro de {employee['full_name']} excluído deste sistema. "
             "O banco corporativo do RH não foi alterado."
         )
+        return redirect(url_for("admin_collaborators"))
+
+    @app.route("/admin/colaboradores/excluir-inativos", methods=["POST"])
+    @_admin_manager_required
+    def admin_employees_delete_inactive():
+        if not _valid_csrf():
+            flash("A sessão expirou. Nenhum registro foi excluído.")
+            return redirect(url_for("admin_collaborators"))
+        status = equalization_status()
+        if not status["equalized"]:
+            flash(status["message"])
+            return redirect(url_for("admin_collaborators"))
+
+        selected_ids = {value for value in request.form.getlist("employee_ids") if value.isdigit()}
+        employees = [
+            employee for employee in list_employees(active_only=False)
+            if str(employee["id"]) in selected_ids and not employee["active"]
+        ]
+        for employee in employees:
+            delete_employee_override(
+                employee["id"], employee, session["admin_user"]["username"]
+            )
+        if employees:
+            flash(
+                f"{len(employees)} colaborador(es) inativo(s) excluído(s) deste sistema. "
+                "O banco corporativo do RH não foi alterado."
+            )
+        else:
+            flash("Selecione ao menos um colaborador inativo para excluir.")
+        return redirect(url_for("admin_collaborators"))
+
+    @app.route("/admin/colaboradores/limpar-emails-duplicados", methods=["POST"])
+    @_admin_manager_required
+    def admin_employees_clear_duplicate_emails():
+        if not _valid_csrf():
+            flash("A sessão expirou. Nenhum e-mail foi limpo.")
+            return redirect(url_for("admin_collaborators"))
+        status = equalization_status()
+        if not status["equalized"]:
+            flash(status["message"])
+            return redirect(url_for("admin_collaborators"))
+
+        selected_ids = {value for value in request.form.getlist("employee_ids") if value.isdigit()}
+        employees = [
+            employee for employee in list_employees(active_only=False)
+            if str(employee["id"]) in selected_ids and employee["duplicate_email"]
+        ]
+        for employee in employees:
+            save_employee_override(
+                employee["id"],
+                employee,
+                {**employee, "email": ""},
+                session["admin_user"]["username"],
+            )
+        if employees:
+            flash(f"E-mail removido de {len(employees)} colaborador(es) com duplicidade.")
+        else:
+            flash("Selecione ao menos um colaborador com e-mail duplicado para limpar.")
         return redirect(url_for("admin_collaborators"))
 
     @app.route("/admin/import", methods=["GET", "POST"])

@@ -83,4 +83,4 @@ def create_app(test_config=None):
 
 
 ##após fazer uma alteração, se quiser comitar e fazer deply use:
-##.\scripts\commit-deploy.ps1 -Message "Msg commit"
+##.\scripts\commit-deploy.ps1 -Message "Msg commit - atualizacoes"

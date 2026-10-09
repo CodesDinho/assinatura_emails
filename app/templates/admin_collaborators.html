@@ -1,10 +1,59 @@
 {% extends 'base.html' %}
 {% block title %}Colaboradores{% endblock %}
-{% block content %}<section class="card wide-card">
-  <div class="page-header"><div><h1>Colaboradores</h1><p>Total: {{ total }} | Ativos: {{ active }} | Aptos: {{ ready }} | Sem e-mail válido: {{ missing_email }}</p></div><a class="button-link secondary" href="{{ url_for('admin_dashboard') }}">Voltar ao menu</a></div>
-  <h2>Publicação corporativa</h2>{% if corporate_status['equalized'] %}<p>Última publicação: {{ corporate_status['latest']['imported_at'] }} | Arquivo: {{ corporate_status['latest']['arquivo_origem'] }} | Responsável: {{ corporate_status['latest']['imported_by'] }}</p>{% else %}<p class="error">{{ corporate_status['message'] }}</p>{% endif %}
-  <h2>Cobertura Lorac</h2><div class="table-wrapper compact-table"><table class="summary-table"><thead><tr><th>Total com Lorac ativo</th><th>Com e-mail validado</th><th>Pendências</th><th>Cobertura</th></tr></thead><tbody><tr><td>{{ lorac_coverage['total'] }}</td><td>{{ lorac_coverage['ready'] }}</td><td>{{ lorac_coverage['pending_count'] }}</td><td>{{ lorac_coverage['coverage_percent'] }}%</td></tr></tbody></table></div>
-  <div class="table-wrapper"><table id="employees-table"><thead><tr><th><button class="sort-button" type="button" data-column="0">Nome ↕</button></th><th><button class="sort-button" type="button" data-column="1">Cargo ↕</button></th><th><button class="sort-button" type="button" data-column="2">E-mail ↕</button></th><th><button class="sort-button" type="button" data-column="3">Celular ↕</button></th><th><button class="sort-button" type="button" data-column="4">Status ↕</button></th><th><button class="sort-button" type="button" data-column="5">Assinatura gerada ↕</button></th><th>Ações</th></tr></thead><tbody>
-  {% for employee in employees %}<tr><td>{{ employee['full_name'] }}{% if employee['overridden'] %} <span class="override-state">corrigido</span>{% endif %}</td><td>{{ employee['job_title'] }}</td><td>{{ employee['email'] or '—' }}{% if employee['duplicate_email'] %} <span class="error">(duplicado — bloqueado)</span>{% endif %}</td><td>{{ employee['phone'] or '—' }}</td><td><span class="signature-state {{ 'generated' if employee['active'] else 'inactive' }}">{{ 'Ativo' if employee['active'] else 'Inativo' }}</span></td><td data-sort-value="{{ 1 if employee['signature_generated'] else 0 }}"><span class="signature-state {{ 'generated' if employee['signature_generated'] else 'not-generated' }}">{{ 'Sim' if employee['signature_generated'] else 'Não' }}</span></td><td><div class="table-actions"><a class="table-action" href="{{ url_for('admin_employee_edit', employee_id=employee['id']) }}">Editar</a><form method="post" action="{{ url_for('admin_employee_delete', employee_id=employee['id']) }}" onsubmit="return confirm('Excluir este colaborador do sistema?');"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><button class="table-action danger" type="submit">Excluir</button></form></div></td></tr>{% else %}<tr><td colspan="7">Nenhum colaborador disponível.</td></tr>{% endfor %}
+{% block content %}
+<section class="card wide-card" data-column="0">
+  <div class="page-header">
+    <div>
+      <h1>Colaboradores</h1>
+      <p>Total: {{ total }} | Ativos: {{ active }} | Inativos: {{ inactive }} | Aptos: {{ ready }} | Sem e-mail válido: {{ missing_email }} | Com e-mail duplicado: <strong>{{ duplicate_email_count }}</strong></p>
+    </div>
+    <a class="button-link secondary" href="{{ url_for('admin_dashboard') }}">Voltar ao menu</a>
+  </div>
+  <h2>Publicação corporativa</h2>
+  {% if corporate_status['equalized'] %}<p>Última publicação: {{ corporate_status['latest']['imported_at'] }} | Arquivo: {{ corporate_status['latest']['arquivo_origem'] }} | Responsável: {{ corporate_status['latest']['imported_by'] }}</p>{% else %}<p class="error">{{ corporate_status['message'] }}</p>{% endif %}
+  <h2>Cobertura Lorac</h2>
+  <div class="table-wrapper compact-table"><table class="summary-table"><thead><tr><th>Total com Lorac ativo</th><th>Com e-mail validado</th><th>Pendências</th><th>Cobertura</th></tr></thead><tbody><tr><td>{{ lorac_coverage['total'] }}</td><td>{{ lorac_coverage['ready'] }}</td><td>{{ lorac_coverage['pending_count'] }}</td><td>{{ lorac_coverage['coverage_percent'] }}%</td></tr></tbody></table></div>
+  <form id="bulk-employees-form" method="post"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"></form>
+  <div class="bulk-actions" aria-label="Ações em lote">
+    <button class="table-action" id="select-inactive" type="button">Selecionar todos os inativos ({{ inactive }})</button>
+    <button class="table-action" id="select-duplicates" type="button">Selecionar e-mails duplicados ({{ duplicate_email_count }})</button>
+    <button class="table-action secondary-action" id="clear-selection" type="button">Limpar seleção</button>
+    <span id="selected-count" aria-live="polite">0 selecionados</span>
+    <button class="table-action danger" name="bulk_action" value="delete-inactive" type="submit" form="bulk-employees-form" formaction="{{ url_for('admin_employees_delete_inactive') }}">Excluir inativos selecionados</button>
+    <button class="table-action danger" name="bulk_action" value="clear-duplicates" type="submit" form="bulk-employees-form" formaction="{{ url_for('admin_employees_clear_duplicate_emails') }}">Limpar e-mails duplicados selecionados</button>
+  </div>
+  <div class="table-wrapper"><table id="employees-table"><thead><tr><th>Selecionar</th><th><button class="sort-button" type="button" data-column="1">Nome ↕</button></th><th><button class="sort-button" type="button" data-column="2">Cargo ↕</button></th><th><button class="sort-button" type="button" data-column="3">E-mail ↕</button></th><th><button class="sort-button" type="button" data-column="4">Celular ↕</button></th><th><button class="sort-button" type="button" data-column="5">Status ↕</button></th><th><button class="sort-button" type="button" data-column="6">Assinatura gerada ↕</button></th><th>Ações</th></tr></thead><tbody>
+  {% for employee in employees %}
+    <tr>
+      <td><input class="employee-selector" form="bulk-employees-form" name="employee_ids" type="checkbox" value="{{ employee['id'] }}" data-inactive="{{ '1' if not employee['active'] else '0' }}" data-duplicate="{{ '1' if employee['duplicate_email'] else '0' }}" aria-label="Selecionar {{ employee['full_name'] }}"></td>
+      <td>{{ employee['full_name'] }}{% if employee['overridden'] %} <span class="override-state">corrigido</span>{% endif %}</td><td>{{ employee['job_title'] }}</td>
+      <td>{{ employee['email'] or '—' }}{% if employee['duplicate_email'] %} <span class="error">(duplicado — bloqueado)</span>{% endif %}</td><td>{{ employee['phone'] or '—' }}</td>
+      <td><span class="signature-state {{ 'generated' if employee['active'] else 'inactive' }}">{{ 'Ativo' if employee['active'] else 'Inativo' }}</span></td>
+      <td data-sort-value="{{ 1 if employee['signature_generated'] else 0 }}"><span class="signature-state {{ 'generated' if employee['signature_generated'] else 'not-generated' }}">{{ 'Sim' if employee['signature_generated'] else 'Não' }}</span></td>
+      <td><div class="table-actions"><a class="table-action" href="{{ url_for('admin_employee_edit', employee_id=employee['id']) }}">Editar</a><form method="post" action="{{ url_for('admin_employee_delete', employee_id=employee['id']) }}" onsubmit="return confirm('Excluir este colaborador do sistema?');"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><button class="table-action danger" type="submit">Excluir</button></form></div></td>
+    </tr>
+  {% else %}<tr><td colspan="8">Nenhum colaborador disponível.</td></tr>{% endfor %}
   </tbody></table></div>
-</section><script>(()=>{const table=document.getElementById('employees-table');if(!table)return;const body=table.tBodies[0];let active=-1,ascending=true;table.querySelectorAll('.sort-button').forEach(button=>button.addEventListener('click',()=>{const column=Number(button.dataset.column);ascending=active===column?!ascending:true;active=column;const rows=Array.from(body.rows).filter(row=>row.cells.length>1);rows.sort((a,b)=>{const left=(a.cells[column].dataset.sortValue??a.cells[column].textContent).trim();const right=(b.cells[column].dataset.sortValue??b.cells[column].textContent).trim();return left.localeCompare(right,'pt-BR',{numeric:true,sensitivity:'base'})*(ascending?1:-1);});rows.forEach(row=>body.appendChild(row));}));})();</script>{% endblock %}
+</section>
+<script>
+(()=>{
+  const table=document.getElementById('employees-table');if(!table)return;
+  const body=table.tBodies[0],selectors=Array.from(table.querySelectorAll('.employee-selector')),count=document.getElementById('selected-count');
+  const updateCount=()=>{const total=selectors.filter(item=>item.checked).length;count.textContent=`${total} selecionado${total===1?'':'s'}`;};
+  const selectBy=attribute=>{selectors.forEach(item=>{item.checked=item.dataset[attribute]==='1';});updateCount();};
+  document.getElementById('select-inactive').addEventListener('click',()=>selectBy('inactive'));
+  document.getElementById('select-duplicates').addEventListener('click',()=>selectBy('duplicate'));
+  document.getElementById('clear-selection').addEventListener('click',()=>{selectors.forEach(item=>{item.checked=false;});updateCount();});
+  selectors.forEach(item=>item.addEventListener('change',updateCount));
+  document.getElementById('bulk-employees-form').addEventListener('submit',event=>{
+    const selected=selectors.filter(item=>item.checked).length;
+    if(!selected){event.preventDefault();alert('Selecione ao menos um colaborador.');return;}
+    const deleting=event.submitter?.value==='delete-inactive';
+    const message=deleting?`Excluir ${selected} colaborador(es) inativo(s) selecionado(s) deste sistema?`:`Remover o e-mail de ${selected} colaborador(es) selecionado(s) que estejam com duplicidade?`;
+    if(!confirm(message))event.preventDefault();
+  });
+  let active=-1,ascending=true;
+  table.querySelectorAll('.sort-button').forEach(button=>button.addEventListener('click',()=>{const column=Number(button.dataset.column);ascending=active===column?!ascending:true;active=column;const rows=Array.from(body.rows).filter(row=>row.cells.length>1);rows.sort((a,b)=>{const left=(a.cells[column].dataset.sortValue??a.cells[column].textContent).trim();const right=(b.cells[column].dataset.sortValue??b.cells[column].textContent).trim();return left.localeCompare(right,'pt-BR',{numeric:true,sensitivity:'base'})*(ascending?1:-1);});rows.forEach(row=>body.appendChild(row));}));
+})();
+</script>
+{% endblock %}

@@ -98,6 +98,11 @@ a {
 .logout-form, .logout-form button { margin: 0; width: auto; }
 .table-wrapper { width: 100%; overflow-x: auto; padding: 0 4px 8px 0; box-sizing: border-box; }
 #employees-table { min-width: 1120px; }
+#employees-table .employee-selector { width: auto; margin: 0; }
+.bulk-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 18px 0 12px; }
+.bulk-actions .table-action { margin: 0; }
+.bulk-actions .secondary-action { border-color: #7b8794; color: #53657a; }
+.bulk-actions #selected-count { margin: 0 auto 0 4px; color: #596575; font-weight: bold; }
 table { width: 100%; border-collapse: collapse; }
 th, td { padding: 10px; border-bottom: 1px solid #e3e7ed; text-align: left; vertical-align: top; }
 .sort-button { width: auto; padding: 0; margin: 0; border: 0; border-radius: 0; background: transparent; color: inherit; text-align: left; white-space: nowrap; }
