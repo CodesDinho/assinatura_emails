@@ -113,6 +113,39 @@ def send_approval_request_email(recipient_email, request_data, approval_url):
     return _send_message(message, settings)
 
 
+def send_rejection_email(recipient_email, employee_name, new_request_url):
+    settings = resolve_smtp_settings()
+    if not settings["host"]:
+        return {"status": "simulated", "message": "E-mail de rejeição simulado; SMTP não configurado."}
+    if settings["username"] and not settings["password"]:
+        return {
+            "status": "error",
+            "code": "smtp_configuration",
+            "message": "SMTP_USERNAME está definido, mas SMTP_PASSWORD está vazio.",
+        }
+
+    message = EmailMessage()
+    message["From"] = settings["from_email"]
+    message["To"] = recipient_email
+    message["Subject"] = "Nova foto necessária para sua assinatura — Dinho Distribuidora"
+    message.set_content(
+        f"Olá, {employee_name}!\n\n"
+        "A foto enviada não foi aprovada para a imagem do WhatsApp. "
+        "Faça uma nova solicitação e envie outra foto, conferindo o enquadramento antes de finalizar.\n\n"
+        f"Nova solicitação: {new_request_url}"
+    )
+    message.add_alternative(
+        "<p>Olá, <strong>" + escape(employee_name) + "</strong>!</p>"
+        "<p>A foto enviada não foi aprovada para a imagem do WhatsApp. "
+        "Faça uma nova solicitação e envie outra foto, conferindo o enquadramento antes de finalizar.</p>"
+        "<p><a href=\"" + escape(new_request_url, quote=True) + "\" "
+        "style=\"display:inline-block;padding:12px 18px;background:#154c8c;color:#fff;"
+        "text-decoration:none;border-radius:8px;font-weight:bold\">Enviar outra foto</a></p>",
+        subtype="html",
+    )
+    return _send_message(message, settings)
+
+
 def _send_message(message, settings):
     try:
         if settings["use_ssl"]:

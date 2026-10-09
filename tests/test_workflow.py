@@ -3,7 +3,7 @@ from pathlib import Path
 import sqlite3
 
 from app import create_app
-from app.services.email_sender import resolve_smtp_settings, send_signature_email
+from app.services.email_sender import resolve_smtp_settings, send_rejection_email, send_signature_email
 from app.services.employee_importer import build_employee_record, normalize_email, validate_employee_row
 from app.services.signature_generator import ICON_BLUE, _font, generate_signature_image
 from app.services.whatsapp_card_generator import generate_whatsapp_card
@@ -311,6 +311,22 @@ def test_validator_can_reject_and_delete_request(tmp_path):
         assert get_signature_request("pedido")["status"] == "rejected"
         assert delete_signature_request("pedido") is True
         assert get_signature_request("pedido") is None
+
+
+def test_rejection_email_requests_another_photo(monkeypatch):
+    captured = []
+    monkeypatch.setattr("app.services.email_sender.resolve_smtp_settings", lambda: {
+        "host": "smtp.test", "port": 465, "username": "", "password": "",
+        "from_email": "assinaturas@empresa.com", "use_tls": False, "use_ssl": True,
+    })
+    monkeypatch.setattr(
+        "app.services.email_sender._send_message",
+        lambda message, settings: captured.append(message) or {"status": "sent"},
+    )
+    result = send_rejection_email("maria@empresa.com", "Maria", "https://assinaturas.test/")
+    assert result["status"] == "sent"
+    assert captured[0]["To"] == "maria@empresa.com"
+    assert "outra foto" in str(captured[0]).lower()
 
 
 def test_administrator_can_change_validator_in_admin_panel(tmp_path):
@@ -666,6 +682,8 @@ def test_admin_dashboard_marks_generated_signature_and_has_sortable_headers(tmp_
         assert 'data-column="0"' in dashboard.text
         assert "Assinatura gerada" in dashboard.text
         assert 'class="signature-state generated">Sim' in dashboard.text
+        assert 'class="signature-state inactive">Inativo' in dashboard.text
+        assert 'class="signature-state not-generated">Não' in dashboard.text
         assert "Cobertura Lorac" in dashboard.text
         assert "Total com Lorac ativo" in dashboard.text
         assert "Com e-mail validado" in dashboard.text

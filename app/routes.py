@@ -8,7 +8,7 @@ from flask import abort, current_app, flash, redirect, render_template, request,
 from werkzeug.security import check_password_hash
 
 from app.services.admin_auth import authenticate_user, create_admin_user, list_active_users
-from app.services.email_sender import send_approval_request_email, send_signature_email
+from app.services.email_sender import send_approval_request_email, send_rejection_email, send_signature_email
 from app.services.employee_importer import (
     build_employee_record,
     normalize_email,
@@ -534,8 +534,18 @@ def register_routes(app):
             return redirect(url_for("admin_signature_request", request_id=request_id))
         for path_value in (approval["signature_path"], approval["whatsapp_path"]):
             Path(path_value).unlink(missing_ok=True)
-        _log_request(approval["employee_email"], "rejected", f"rejeitada por {reviewer}")
-        flash(f"Solicitação de {approval['employee_name']} rejeitada. Nenhum e-mail foi enviado.")
+        notification = send_rejection_email(
+            approval["employee_email"],
+            approval["employee_name"],
+            current_app.config["APP_BASE_URL"].rstrip("/") + url_for("home"),
+        )
+        detail = f"rejeitada por {reviewer}"
+        if notification.get("status") not in {"sent", "simulated"}:
+            detail += f"; notificação falhou: {notification.get('message', 'erro desconhecido')}"
+            flash("A solicitação foi rejeitada, mas o e-mail de orientação não pôde ser enviado.")
+        else:
+            flash(f"Solicitação de {approval['employee_name']} rejeitada. O usuário foi orientado a enviar outra foto.")
+        _log_request(approval["employee_email"], "rejected", detail)
         return redirect(url_for("admin_signature_requests"))
 
     @app.route("/admin/solicitacoes/<request_id>/excluir", methods=["POST"])
