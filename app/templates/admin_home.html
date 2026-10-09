@@ -1,0 +1,17 @@
+{% extends 'base.html' %}
+{% block title %}Área administrativa{% endblock %}
+{% block content %}
+<section class="card wide-card">
+  <div class="page-header"><div><h1>Área administrativa</h1><p>Olá, {{ session['admin_user']['name'] }}. Escolha uma funcionalidade.</p></div><form class="logout-form" method="post" action="{{ url_for('admin_logout') }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><button class="button-link secondary" type="submit">Sair</button></form></div>
+  <nav class="admin-menu" aria-label="Funcionalidades administrativas">
+    {% if is_signature_validator %}<a href="{{ url_for('admin_signature_requests') }}"><strong>Aprovar assinaturas pendentes</strong><span>{{ pending_approval_count }} aguardando análise</span></a>{% endif %}
+    {% if is_admin_manager %}
+      <a href="{{ url_for('admin_users') }}"><strong>Criar usuário</strong><span>Cadastros e usuários atuais</span></a>
+      <a href="{{ url_for('admin_validator_settings') }}"><strong>Configuração do aprovador</strong><span>Responsável pelas validações</span></a>
+      <a href="{{ url_for('admin_import') }}"><strong>Cargas pendentes</strong><span>Enviar e consultar cargas</span></a>
+      <a href="{{ url_for('admin_recent_requests') }}"><strong>Solicitações recentes</strong><span>Histórico de solicitações</span></a>
+      <a href="{{ url_for('admin_collaborators') }}"><strong>Colaboradores</strong><span>Consulta e correções administrativas</span></a>
+    {% endif %}
+  </nav>
+</section>
+{% endblock %}

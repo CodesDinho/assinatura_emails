@@ -1,0 +1,3 @@
+{% extends 'base.html' %}
+{% block title %}Solicitações recentes{% endblock %}
+{% block content %}<section class="card wide-card"><div class="page-header"><h1>Solicitações recentes</h1><a class="button-link secondary" href="{{ url_for('admin_dashboard') }}">Voltar ao menu</a></div><div class="table-wrapper"><table><thead><tr><th>Data</th><th>Status</th><th>E-mail</th><th>Detalhes</th></tr></thead><tbody>{% for log in request_rows %}<tr><td>{{ log['created_at'] }}</td><td>{{ log['status'] }}</td><td>{{ log['normalized_email'] }}</td><td>{{ log['details'] or '—' }}</td></tr>{% else %}<tr><td colspan="4">Nenhuma solicitação registrada.</td></tr>{% endfor %}</tbody></table></div></section>{% endblock %}

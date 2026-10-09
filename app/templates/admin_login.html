@@ -5,6 +5,7 @@
   <h1>Login administrativo</h1>
   <form method="post">
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <input type="hidden" name="next" value="{{ next_url or '' }}">
     <label for="username">Usuário</label>
     <input id="username" name="username" required>
     <label for="password">Senha</label>

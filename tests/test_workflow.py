@@ -305,10 +305,12 @@ def test_administrator_can_change_validator_in_admin_panel(tmp_path):
         client.post("/admin/login", data={"username": "rh", "password": "rh", "csrf_token": token})
         dashboard = client.get("/admin")
         assert "Configuração do aprovador" in dashboard.text
-        assert 'id="admin-users-table"' in dashboard.text
-        assert "suporte.dinho" in dashboard.text
-        assert "roberson.souza" in dashboard.text
-        csrf = dashboard.text.split('name="csrf_token" value="', 1)[1].split('"', 1)[0]
+        users_page = client.get("/admin/usuarios")
+        assert 'id="admin-users-table"' in users_page.text
+        assert "suporte.dinho" in users_page.text
+        assert "roberson.souza" in users_page.text
+        settings_page = client.get("/admin/configuracao/aprovador")
+        csrf = settings_page.text.split('name="csrf_token" value="', 1)[1].split('"', 1)[0]
         saved = client.post("/admin/configuracao/aprovador", data={
             "csrf_token": csrf,
             "validator_username": "suporte.dinho",
@@ -337,8 +339,17 @@ def test_wrong_logged_user_gets_validator_guidance_instead_of_forbidden(tmp_path
         client.post("/admin/login", data={"username": "suporte.dinho", "password": "suporte.dinho", "csrf_token": token})
         response = client.get("/admin/solicitacoes/pedido-inexistente")
         assert response.status_code == 302
-        dashboard = client.get(response.headers["Location"])
-        assert "só pode ser validada pelo aprovador atual: roberson.souza" in dashboard.text
+        login_again = client.get(response.headers["Location"])
+        assert "Entre com o aprovador atual para acessar esta solicitação: roberson.souza" in login_again.text
+        assert 'name="next" value="/admin/solicitacoes/pedido-inexistente"' in login_again.text
+        token = login_again.text.split('name="csrf_token" value="', 1)[1].split('"', 1)[0]
+        logged = client.post("/admin/login", data={
+            "csrf_token": token,
+            "next": "/admin/solicitacoes/pedido-inexistente",
+            "username": "roberson.souza",
+            "password": "roberson.souza",
+        })
+        assert logged.headers["Location"].endswith("/admin/solicitacoes/pedido-inexistente")
 
 
 def test_administrator_can_create_user_and_make_it_validator(tmp_path):
@@ -356,7 +367,7 @@ def test_administrator_can_create_user_and_make_it_validator(tmp_path):
         login_page = client.get("/admin/login")
         token = login_page.text.split('name="csrf_token" value="', 1)[1].split('"', 1)[0]
         client.post("/admin/login", data={"username": "suporte.dinho", "password": "suporte.dinho", "csrf_token": token})
-        dashboard = client.get("/admin")
+        dashboard = client.get("/admin/colaboradores")
         csrf = dashboard.text.split('name="csrf_token" value="', 1)[1].split('"', 1)[0]
         created = client.post("/admin/usuarios/novo", data={
             "csrf_token": csrf,
@@ -625,7 +636,7 @@ def test_admin_dashboard_marks_generated_signature_and_has_sortable_headers(tmp_
         login_page = client.get("/admin/login")
         token = login_page.text.split('name="csrf_token" value="', 1)[1].split('"', 1)[0]
         client.post("/admin/login", data={"username": "rh", "password": "rh", "csrf_token": token})
-        dashboard = client.get("/admin")
+        dashboard = client.get("/admin/colaboradores")
         assert dashboard.status_code == 200
         assert 'data-column="0"' in dashboard.text
         assert "Assinatura gerada" in dashboard.text
@@ -634,7 +645,7 @@ def test_admin_dashboard_marks_generated_signature_and_has_sortable_headers(tmp_
         assert "Total com Lorac ativo" in dashboard.text
         assert "Com e-mail validado" in dashboard.text
         assert "Pendências" in dashboard.text
-        assert "Sem E-mail Válido" in dashboard.text
+        assert "Identidade Lorac" not in dashboard.text
         assert ">Editar</a>" in dashboard.text
         assert ">Excluir</button>" in dashboard.text
 

@@ -68,7 +68,9 @@ def _admin_login_required(view_func):
     @wraps(view_func)
     def wrapper(*args, **kwargs):
         if not session.get("admin_user"):
-            return redirect(url_for("admin_login", next=request.full_path.rstrip("?")))
+            next_url = request.full_path.rstrip("?")
+            session["login_next"] = next_url
+            return redirect(url_for("admin_login", next=next_url))
         return view_func(*args, **kwargs)
     return wrapper
 
@@ -90,12 +92,14 @@ def _signature_validator_required(view_func):
     def wrapper(*args, **kwargs):
         if not _is_signature_validator():
             validator = get_validator_settings()
+            next_url = request.full_path.rstrip("?")
+            session.clear()
+            session["login_next"] = next_url
             flash(
-                "Esta solicitação só pode ser validada pelo aprovador atual: "
-                f"{validator['validator_username']}. Saia e entre com esse usuário, "
-                "ou altere o aprovador na configuração administrativa."
+                "Entre com o aprovador atual para acessar esta solicitação: "
+                f"{validator['validator_username']}."
             )
-            return redirect(url_for("admin_dashboard"))
+            return redirect(url_for("admin_login", next=next_url))
         return view_func(*args, **kwargs)
     return wrapper
 
@@ -277,6 +281,9 @@ def register_routes(app):
     @app.route("/admin/login", methods=["GET", "POST"])
     def admin_login():
         if session.get("admin_user"):
+            next_url = request.args.get("next", "") or session.pop("login_next", "")
+            if next_url.startswith("/admin/") and not next_url.startswith("//"):
+                return redirect(next_url)
             return redirect(url_for("admin_dashboard"))
         if request.method == "POST":
             if not _valid_csrf():
@@ -298,22 +305,34 @@ def register_routes(app):
             if not user and username == current_app.config.get("ADMIN_USERNAME") and expected_hash and check_password_hash(expected_hash, password):
                 user = {"username": username, "name": username, "role": "Administrador"}
             if user:
+                saved_next = request.form.get("next", "") or request.args.get("next", "") or session.get("login_next", "")
                 session.clear()
                 session["admin_user"] = user
                 session.permanent = True
                 _csrf_token()
                 _LOGIN_ATTEMPTS.pop(key, None)
-                next_url = request.args.get("next", "")
+                next_url = saved_next
                 if next_url.startswith("/admin/") and not next_url.startswith("//"):
                     return redirect(next_url)
                 return redirect(url_for("admin_dashboard"))
             _LOGIN_ATTEMPTS.setdefault(key, []).append(time.monotonic())
             flash("Credenciais inválidas.")
-        return render_template("admin_login.html")
+        return render_template("admin_login.html", next_url=request.args.get("next", "") or session.get("login_next", ""))
 
     @app.route("/admin")
     @_admin_login_required
     def admin_dashboard():
+        approvals = list_signature_requests()
+        return render_template(
+            "admin_home.html",
+            is_signature_validator=_is_signature_validator(),
+            is_admin_manager=_is_admin_manager(),
+            pending_approval_count=sum(1 for item in approvals if item["status"] in {"pending", "failed"}),
+        )
+
+    @app.route("/admin/colaboradores")
+    @_admin_manager_required
+    def admin_collaborators():
         status = equalization_status()
         rows = []
         summary = {"active": 0, "ready": 0, "missing_email": 0}
@@ -325,11 +344,8 @@ def register_routes(app):
         generated_emails = successful_request_emails(current_app.config["REQUEST_LOG_PATH"])
         for employee in rows:
             employee["signature_generated"] = employee["email"] in generated_emails
-        logs = recent_request_logs(current_app.config["REQUEST_LOG_PATH"])
-        pending = list_pending_imports(current_app.config["PENDING_IMPORTS_PATH"])
-        validator_settings = get_validator_settings()
         return render_template(
-            "admin_dashboard.html",
+            "admin_collaborators.html",
             employees=rows,
             total=len(rows),
             active=summary["active"],
@@ -338,15 +354,30 @@ def register_routes(app):
             missing_email=summary["missing_email"],
             corporate_status=status,
             lorac_coverage=lorac,
-            pending_imports=pending,
-            request_rows=logs,
-            approval_rows=list_signature_requests() if _is_signature_validator() else [],
-            is_signature_validator=_is_signature_validator(),
-            is_admin_manager=_is_admin_manager(),
-            validator_settings=validator_settings,
+        )
+
+    @app.route("/admin/usuarios")
+    @_admin_manager_required
+    def admin_users():
+        return render_template(
+            "admin_users.html",
+            validator_settings=get_validator_settings(),
             admin_users=list_active_users(
                 current_app.config["ADMIN_USERS_PATH"], current_app.config["ADMIN_USERS_DB_PATH"]
             ),
+        )
+
+    @app.route("/admin/solicitacoes")
+    @_signature_validator_required
+    def admin_signature_requests():
+        return render_template("admin_signature_requests.html", approval_rows=list_signature_requests())
+
+    @app.route("/admin/solicitacoes-recentes")
+    @_admin_manager_required
+    def admin_recent_requests():
+        return render_template(
+            "admin_recent_requests.html",
+            request_rows=recent_request_logs(current_app.config["REQUEST_LOG_PATH"], limit=100),
         )
 
     @app.route("/admin/usuarios/novo", methods=["POST"])
@@ -354,7 +385,7 @@ def register_routes(app):
     def admin_user_create():
         if not _valid_csrf():
             flash("A sessão expirou. O usuário não foi criado.")
-            return redirect(url_for("admin_dashboard"))
+            return redirect(url_for("admin_users"))
         username = normalize_text(request.form.get("username")).lower()
         name = normalize_text(request.form.get("name"))
         email = normalize_email(request.form.get("email"))
@@ -363,16 +394,16 @@ def register_routes(app):
         make_validator = request.form.get("make_validator") == "1"
         if not re.fullmatch(r"[a-z0-9._-]{3,64}", username):
             flash("O usuário deve ter de 3 a 64 caracteres: letras minúsculas, números, ponto, hífen ou sublinhado.")
-            return redirect(url_for("admin_dashboard"))
+            return redirect(url_for("admin_users"))
         if not name or not email or "@" not in email:
             flash("Informe nome e e-mail válidos para o novo usuário.")
-            return redirect(url_for("admin_dashboard"))
+            return redirect(url_for("admin_users"))
         if len(password) < 10:
             flash("A senha inicial deve ter pelo menos 10 caracteres.")
-            return redirect(url_for("admin_dashboard"))
+            return redirect(url_for("admin_users"))
         if role not in {"Administrador", "Validador de assinaturas"}:
             flash("Selecione um perfil válido.")
-            return redirect(url_for("admin_dashboard"))
+            return redirect(url_for("admin_users"))
         try:
             create_admin_user(
                 current_app.config["ADMIN_USERS_PATH"],
@@ -390,14 +421,22 @@ def register_routes(app):
         if make_validator:
             save_validator_settings(username, email, session["admin_user"]["username"])
         flash(f"Usuário {username} criado com sucesso." + (" Ele agora é o aprovador." if make_validator else ""))
-        return redirect(url_for("admin_dashboard"))
+        return redirect(url_for("admin_users"))
 
-    @app.route("/admin/configuracao/aprovador", methods=["POST"])
+    @app.route("/admin/configuracao/aprovador", methods=["GET", "POST"])
     @_admin_manager_required
     def admin_validator_settings():
+        if request.method == "GET":
+            return render_template(
+                "admin_validator_settings.html",
+                validator_settings=get_validator_settings(),
+                admin_users=list_active_users(
+                    current_app.config["ADMIN_USERS_PATH"], current_app.config["ADMIN_USERS_DB_PATH"]
+                ),
+            )
         if not _valid_csrf():
             flash("A sessão expirou. O aprovador não foi alterado.")
-            return redirect(url_for("admin_dashboard"))
+            return redirect(url_for("admin_validator_settings"))
         username = normalize_text(request.form.get("validator_username")).lower()
         email = normalize_email(request.form.get("validator_email"))
         active_users = list_active_users(
@@ -405,13 +444,13 @@ def register_routes(app):
         )
         if not any(item["username"].lower() == username for item in active_users):
             flash("Selecione um usuário interno ativo para ser o aprovador.")
-            return redirect(url_for("admin_dashboard"))
+            return redirect(url_for("admin_validator_settings"))
         if not email or "@" not in email:
             flash("Informe um e-mail válido para o aprovador.")
-            return redirect(url_for("admin_dashboard"))
+            return redirect(url_for("admin_validator_settings"))
         save_validator_settings(username, email, session["admin_user"]["username"])
         flash(f"Aprovador atualizado para {username} ({email}).")
-        return redirect(url_for("admin_dashboard"))
+        return redirect(url_for("admin_validator_settings"))
 
     @app.route("/admin/solicitacoes/<request_id>")
     @_signature_validator_required
@@ -471,13 +510,13 @@ def register_routes(app):
             except OSError:
                 pass
         flash(f"Assinatura de {approval['employee_name']} aprovada e enviada.")
-        return redirect(url_for("admin_dashboard"))
+        return redirect(url_for("admin_signature_requests"))
 
     @app.route("/admin/colaboradores/novo", methods=["GET", "POST"])
     @_admin_manager_required
     def admin_employee_new():
         flash("A base corporativa é somente leitura. Cadastros devem ser tratados no projeto de equalização.")
-        return redirect(url_for("admin_dashboard"))
+        return redirect(url_for("admin_collaborators"))
 
     @app.route("/admin/colaboradores/<int:employee_id>/editar", methods=["GET", "POST"])
     @_admin_manager_required
@@ -485,11 +524,11 @@ def register_routes(app):
         status = equalization_status()
         if not status["equalized"]:
             flash(status["message"])
-            return redirect(url_for("admin_dashboard"))
+            return redirect(url_for("admin_collaborators"))
         employee = find_employee_by_id(employee_id)
         if not employee:
             flash("Colaborador não encontrado na publicação corporativa atual.")
-            return redirect(url_for("admin_dashboard"))
+            return redirect(url_for("admin_collaborators"))
         if request.method == "GET":
             return render_template("admin_employee_form.html", employee=employee, is_new=False)
         if not _valid_csrf():
@@ -534,22 +573,22 @@ def register_routes(app):
             session["admin_user"]["username"],
         )
         flash(f"Dados de {edited['full_name']} atualizados com segurança.")
-        return redirect(url_for("admin_dashboard"))
+        return redirect(url_for("admin_collaborators"))
 
     @app.route("/admin/colaboradores/<int:employee_id>/excluir", methods=["POST"])
     @_admin_manager_required
     def admin_employee_delete(employee_id):
         if not _valid_csrf():
             flash("A sessão expirou. Nenhum registro foi excluído.")
-            return redirect(url_for("admin_dashboard"))
+            return redirect(url_for("admin_collaborators"))
         status = equalization_status()
         if not status["equalized"]:
             flash(status["message"])
-            return redirect(url_for("admin_dashboard"))
+            return redirect(url_for("admin_collaborators"))
         employee = find_employee_by_id(employee_id)
         if not employee:
             flash("Colaborador não encontrado ou já excluído.")
-            return redirect(url_for("admin_dashboard"))
+            return redirect(url_for("admin_collaborators"))
         delete_employee_override(
             employee_id,
             employee,
@@ -559,19 +598,20 @@ def register_routes(app):
             f"Registro de {employee['full_name']} excluído deste sistema. "
             "O banco corporativo do RH não foi alterado."
         )
-        return redirect(url_for("admin_dashboard"))
+        return redirect(url_for("admin_collaborators"))
 
     @app.route("/admin/import", methods=["GET", "POST"])
     @_admin_manager_required
     def admin_import():
+        pending_imports = list_pending_imports(current_app.config["PENDING_IMPORTS_PATH"])
         if request.method == "POST":
             if not _valid_csrf():
                 flash("A sessão expirou. Tente novamente.")
-                return render_template("admin_import.html"), 400
+                return render_template("admin_import.html", pending_imports=pending_imports), 400
             uploaded = request.files.get("file")
             if not uploaded or not uploaded.filename:
                 flash("Selecione um arquivo CSV ou XLSX.")
-                return render_template("admin_import.html")
+                return render_template("admin_import.html", pending_imports=pending_imports)
             data = read_employee_rows(uploaded.stream, uploaded.filename)
             preview, duplicates, errors, seen = [], [], [], set()
             without_email = 0
@@ -594,7 +634,7 @@ def register_routes(app):
                     without_email += 1
                 preview.append(record)
             if errors or duplicates:
-                return render_template("admin_import.html", preview=preview, errors=errors, duplicates=duplicates)
+                return render_template("admin_import.html", preview=preview, errors=errors, duplicates=duplicates, pending_imports=pending_imports)
             filename = Path(uploaded.filename).name
             result = save_pending_import(
                 current_app.config["PENDING_IMPORTS_PATH"],
@@ -612,8 +652,8 @@ def register_routes(app):
             if without_email:
                 message += f" {without_email} registro(s) ainda estão sem e-mail."
             flash(message)
-            return redirect(url_for("admin_dashboard"))
-        return render_template("admin_import.html")
+            return redirect(url_for("admin_import"))
+        return render_template("admin_import.html", pending_imports=pending_imports)
 
     @app.route("/admin/logout", methods=["POST"])
     @_admin_login_required

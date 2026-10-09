@@ -131,6 +131,11 @@ button:disabled { cursor: wait; opacity: 0.72; }
 .photo-controls { display: grid; grid-template-columns: 190px minmax(180px, 1fr); align-items: center; gap: 4px 14px; }
 .photo-controls label, .photo-controls input { margin: 0; }
 .photo-confirmation { justify-content: center; margin-top: 18px; }
+.admin-menu { display: grid; grid-template-columns: repeat(2, minmax(240px, 1fr)); gap: 16px; margin-top: 24px; }
+.admin-menu a { display: flex; flex-direction: column; gap: 6px; padding: 20px; border: 1px solid #dbe3ec; border-radius: 10px; background: #f8fafc; }
+.admin-menu a:hover { border-color: #154c8c; background: #eef4fb; }
+.admin-menu strong { font-size: 1.05rem; }
+.admin-menu span { color: #596575; }
 .approval-preview-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 24px; margin: 24px 0; }
 .approval-preview-grid figure { margin: 0; padding: 16px; border: 1px solid #e3e7ed; border-radius: 10px; background: #f8fafc; }
 .approval-preview-grid figcaption { margin-bottom: 12px; font-weight: bold; }
@@ -142,4 +147,5 @@ button:disabled { cursor: wait; opacity: 0.72; }
   .validator-settings { grid-template-columns: 1fr; }
   .admin-user-form { grid-template-columns: 1fr; }
   .photo-controls { grid-template-columns: 1fr; gap: 6px; }
+  .admin-menu { grid-template-columns: 1fr; }
 }

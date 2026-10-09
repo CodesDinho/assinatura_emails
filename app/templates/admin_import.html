@@ -2,6 +2,7 @@
 {% block title %}Carga pendente{% endblock %}
 {% block content %}
 <section class="card">
+  <div class="page-header"><span></span><a class="button-link secondary" href="{{ url_for('admin_dashboard') }}">Voltar ao menu</a></div>
   <h1>Enviar carga pendente de colaboradores</h1>
   <p>O arquivo será validado e armazenado como pendência. Ele não atualizará a base corporativa.</p>
   <p>Depois, solicite à TI a etapa 4 — Analisar Email/SharePoint x RH — no projeto de equalização e a publicação da prévia homologada.</p>
@@ -13,6 +14,9 @@
     <p id="selected-file" class="field-help">Nenhum arquivo selecionado.</p>
     <button id="import-button" type="submit">Validar e registrar como pendente</button>
   </form>
+
+  <h2>Cargas pendentes atuais</h2>
+  <ul>{% for item in pending_imports %}<li>{{ item['uploaded_at'] }} — {{ item['filename'] }} — {{ item['uploaded_by'] }} — {{ item['row_count'] }} registros — {{ item['status'] }}</li>{% else %}<li>Nenhuma carga pendente.</li>{% endfor %}</ul>
 
   {% if preview %}
     <h2>Prévia</h2>
