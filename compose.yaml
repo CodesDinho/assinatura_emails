@@ -14,6 +14,7 @@ services:
       SIGNATURE_APPROVALS_PATH: /app/instance/signature_approvals.db
       EMPLOYEE_OVERRIDES_PATH: /app/instance/employee_overrides.db
       ADMIN_USERS_PATH: /app/config/users.json
+      ADMIN_USERS_DB_PATH: /app/instance/admin_users.db
       SESSION_COOKIE_SECURE: ${SESSION_COOKIE_SECURE:-false}
       SMTP_HOST: ${SMTP_HOST:?SMTP_HOST obrigatorio}
       SMTP_PORT: ${SMTP_PORT:-465}

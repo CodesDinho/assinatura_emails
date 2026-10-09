@@ -247,6 +247,7 @@ def test_signature_is_sent_to_sqlite_email_only_after_validator_approval(tmp_pat
         "GENERATED_FILES_PATH": str(tmp_path / "generated"),
         "REQUEST_LOG_PATH": str(tmp_path / "requests.jsonl"),
         "SIGNATURE_APPROVALS_PATH": str(approval_path),
+        "ADMIN_USERS_DB_PATH": str(tmp_path / "admin_users.db"),
     })
     with app.app_context():
         save_validator_settings("roberson.souza", "validador@empresa.com", "teste")
@@ -294,6 +295,7 @@ def test_administrator_can_change_validator_in_admin_panel(tmp_path):
         "SECRET_KEY": "test-secret",
         "SHARED_SQLITE_PATH": str(database_path),
         "SIGNATURE_APPROVALS_PATH": str(approval_path),
+        "ADMIN_USERS_DB_PATH": str(tmp_path / "admin_users.db"),
     })
 
     with app.test_client() as client:
@@ -316,6 +318,43 @@ def test_administrator_can_change_validator_in_admin_panel(tmp_path):
     assert settings["validator_email"] == "suporte@empresa.com"
 
 
+def test_administrator_can_create_user_and_make_it_validator(tmp_path):
+    database_path = _corporate_database(tmp_path / "corporate.db")
+    users_db = tmp_path / "admin_users.db"
+    app = create_app(test_config={
+        "TESTING": True,
+        "SECRET_KEY": "test-secret",
+        "SHARED_SQLITE_PATH": str(database_path),
+        "SIGNATURE_APPROVALS_PATH": str(tmp_path / "approvals.db"),
+        "ADMIN_USERS_DB_PATH": str(users_db),
+    })
+
+    with app.test_client() as client:
+        login_page = client.get("/admin/login")
+        token = login_page.text.split('name="csrf_token" value="', 1)[1].split('"', 1)[0]
+        client.post("/admin/login", data={"username": "suporte.dinho", "password": "suporte.dinho", "csrf_token": token})
+        dashboard = client.get("/admin")
+        csrf = dashboard.text.split('name="csrf_token" value="', 1)[1].split('"', 1)[0]
+        created = client.post("/admin/usuarios/novo", data={
+            "csrf_token": csrf,
+            "username": "novo.validador",
+            "name": "Novo Validador",
+            "email": "novo.validador@empresa.com",
+            "role": "Validador de assinaturas",
+            "password": "senha-inicial-segura",
+            "make_validator": "1",
+        })
+        assert created.status_code == 302
+
+    users_path = Path(__file__).resolve().parent.parent / "config" / "users.json"
+    user = authenticate_user(users_path, "novo.validador", "senha-inicial-segura", users_db)
+    assert user["role"] == "Validador de assinaturas"
+    with app.app_context():
+        settings = get_validator_settings()
+    assert settings["validator_username"] == "novo.validador"
+    assert settings["validator_email"] == "novo.validador@empresa.com"
+
+
 def test_compose_mounts_shared_database_read_only():
     compose = (Path(__file__).resolve().parent.parent / "compose.yaml").read_text(encoding="utf-8")
     assert "/home/administrator/Desktop/codes/ti_dinho_slack/shared_data:/shared:ro" in compose
@@ -335,6 +374,7 @@ def test_deploy_script_prepulls_image_and_has_portainer_timeouts():
     assert "RegistryId = 1" in config
     assert "PullTimeoutSeconds = 300" in config
     assert "Merge-ContainerEnvironment" in script
+    assert "Get-DotEnvValue -Path $DotEnvPath -Name 'APP_BASE_URL'" in script
     assert "SGQ_SMTP_PASSWORD" in script
     assert "SMTP_PASSWORD está vazio" in script
     assert "StackId" not in config
@@ -470,6 +510,7 @@ def test_admin_area_lists_pending_upload_without_changing_published_links(tmp_pa
         "SHARED_SQLITE_PATH": str(database_path),
         "PENDING_IMPORTS_PATH": str(tmp_path / "pending"),
         "ADMIN_USERS_PATH": str(users_path),
+        "ADMIN_USERS_DB_PATH": str(tmp_path / "admin_users.db"),
         "REQUEST_LOG_PATH": str(tmp_path / "requests.jsonl"),
         "GENERATED_FILES_PATH": str(tmp_path / "generated"),
     })
@@ -548,6 +589,7 @@ def test_admin_dashboard_marks_generated_signature_and_has_sortable_headers(tmp_
         "SECRET_KEY": "test-secret",
         "SHARED_SQLITE_PATH": str(database_path),
         "ADMIN_USERS_PATH": str(users_path),
+        "ADMIN_USERS_DB_PATH": str(tmp_path / "admin_users.db"),
         "REQUEST_LOG_PATH": str(log_path),
     })
 
@@ -585,6 +627,7 @@ def test_admin_can_remove_wrong_duplicate_email_without_changing_corporate_datab
         "SHARED_SQLITE_PATH": str(database_path),
         "EMPLOYEE_OVERRIDES_PATH": str(overrides_path),
         "ADMIN_USERS_PATH": str(users_path),
+        "ADMIN_USERS_DB_PATH": str(tmp_path / "admin_users.db"),
         "REQUEST_LOG_PATH": str(tmp_path / "requests.jsonl"),
     })
 

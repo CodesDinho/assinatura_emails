@@ -121,6 +121,9 @@ button:disabled { cursor: wait; opacity: 0.72; }
 .checkbox-label input { width: auto; margin: 0; }
 .validator-settings { display: grid; grid-template-columns: minmax(220px, 1fr) minmax(280px, 1.5fr) auto; align-items: end; gap: 12px; margin-bottom: 8px; }
 .validator-settings input, .validator-settings select, .validator-settings button { margin-bottom: 0; }
+.admin-user-form { display: grid; grid-template-columns: repeat(3, minmax(180px, 1fr)); align-items: end; gap: 12px; margin-bottom: 28px; }
+.admin-user-form input, .admin-user-form select, .admin-user-form button { margin-bottom: 0; }
+.admin-user-form .checkbox-label { align-self: center; margin: 0; }
 .approval-preview-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 24px; margin: 24px 0; }
 .approval-preview-grid figure { margin: 0; padding: 16px; border: 1px solid #e3e7ed; border-radius: 10px; background: #f8fafc; }
 .approval-preview-grid figcaption { margin-bottom: 12px; font-weight: bold; }
@@ -130,4 +133,5 @@ button:disabled { cursor: wait; opacity: 0.72; }
   .actions { flex-direction: column; align-items: stretch; }
   .approval-preview-grid { grid-template-columns: 1fr; }
   .validator-settings { grid-template-columns: 1fr; }
+  .admin-user-form { grid-template-columns: 1fr; }
 }

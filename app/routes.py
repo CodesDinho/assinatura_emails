@@ -1,12 +1,13 @@
 import secrets
 import time
+import re
 from functools import wraps
 from pathlib import Path
 
 from flask import abort, current_app, flash, redirect, render_template, request, send_file, session, url_for
 from werkzeug.security import check_password_hash
 
-from app.services.admin_auth import authenticate_user, list_active_users
+from app.services.admin_auth import authenticate_user, create_admin_user, list_active_users
 from app.services.email_sender import send_approval_request_email, send_signature_email
 from app.services.employee_importer import (
     build_employee_record,
@@ -260,7 +261,12 @@ def register_routes(app):
             if _login_is_blocked(key):
                 flash("Muitas tentativas. Aguarde 15 minutos antes de tentar novamente.")
                 return render_template("admin_login.html"), 429
-            user = authenticate_user(current_app.config["ADMIN_USERS_PATH"], username, password)
+            user = authenticate_user(
+                current_app.config["ADMIN_USERS_PATH"],
+                username,
+                password,
+                current_app.config["ADMIN_USERS_DB_PATH"],
+            )
             expected_hash = current_app.config.get("ADMIN_PASSWORD_HASH") or ""
             if not user and username == current_app.config.get("ADMIN_USERNAME") and expected_hash and check_password_hash(expected_hash, password):
                 user = {"username": username, "name": username, "role": "Administrador"}
@@ -311,8 +317,53 @@ def register_routes(app):
             is_signature_validator=_is_signature_validator(),
             is_admin_manager=_is_admin_manager(),
             validator_settings=validator_settings,
-            admin_users=list_active_users(current_app.config["ADMIN_USERS_PATH"]),
+            admin_users=list_active_users(
+                current_app.config["ADMIN_USERS_PATH"], current_app.config["ADMIN_USERS_DB_PATH"]
+            ),
         )
+
+    @app.route("/admin/usuarios/novo", methods=["POST"])
+    @_admin_manager_required
+    def admin_user_create():
+        if not _valid_csrf():
+            flash("A sessão expirou. O usuário não foi criado.")
+            return redirect(url_for("admin_dashboard"))
+        username = normalize_text(request.form.get("username")).lower()
+        name = normalize_text(request.form.get("name"))
+        email = normalize_email(request.form.get("email"))
+        password = request.form.get("password", "")
+        role = request.form.get("role", "")
+        make_validator = request.form.get("make_validator") == "1"
+        if not re.fullmatch(r"[a-z0-9._-]{3,64}", username):
+            flash("O usuário deve ter de 3 a 64 caracteres: letras minúsculas, números, ponto, hífen ou sublinhado.")
+            return redirect(url_for("admin_dashboard"))
+        if not name or not email or "@" not in email:
+            flash("Informe nome e e-mail válidos para o novo usuário.")
+            return redirect(url_for("admin_dashboard"))
+        if len(password) < 10:
+            flash("A senha inicial deve ter pelo menos 10 caracteres.")
+            return redirect(url_for("admin_dashboard"))
+        if role not in {"Administrador", "Validador de assinaturas"}:
+            flash("Selecione um perfil válido.")
+            return redirect(url_for("admin_dashboard"))
+        try:
+            create_admin_user(
+                current_app.config["ADMIN_USERS_PATH"],
+                current_app.config["ADMIN_USERS_DB_PATH"],
+                username,
+                name,
+                email,
+                role,
+                password,
+                session["admin_user"]["username"],
+            )
+        except ValueError as exc:
+            flash(str(exc))
+            return redirect(url_for("admin_dashboard"))
+        if make_validator:
+            save_validator_settings(username, email, session["admin_user"]["username"])
+        flash(f"Usuário {username} criado com sucesso." + (" Ele agora é o aprovador." if make_validator else ""))
+        return redirect(url_for("admin_dashboard"))
 
     @app.route("/admin/configuracao/aprovador", methods=["POST"])
     @_admin_manager_required
@@ -322,7 +373,9 @@ def register_routes(app):
             return redirect(url_for("admin_dashboard"))
         username = normalize_text(request.form.get("validator_username")).lower()
         email = normalize_email(request.form.get("validator_email"))
-        active_users = list_active_users(current_app.config["ADMIN_USERS_PATH"])
+        active_users = list_active_users(
+            current_app.config["ADMIN_USERS_PATH"], current_app.config["ADMIN_USERS_DB_PATH"]
+        )
         if not any(item["username"].lower() == username for item in active_users):
             flash("Selecione um usuário interno ativo para ser o aprovador.")
             return redirect(url_for("admin_dashboard"))

@@ -58,6 +58,10 @@ function Merge-ContainerEnvironment {
             }
         }
     }
+    $appBaseUrl = Get-DotEnvValue -Path $DotEnvPath -Name 'APP_BASE_URL'
+    if (-not [string]::IsNullOrWhiteSpace($appBaseUrl)) {
+        $environment['APP_BASE_URL'] = $appBaseUrl.TrimEnd('/')
+    }
     if (-not [string]::IsNullOrWhiteSpace([string]$environment['SMTP_USERNAME']) -and
         [string]::IsNullOrWhiteSpace([string]$environment['SMTP_PASSWORD'])) {
         throw 'SMTP_PASSWORD está vazio. Preencha SMTP_PASSWORD ou SGQ_SMTP_PASSWORD no .env antes do deploy.'

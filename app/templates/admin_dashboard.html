@@ -39,6 +39,19 @@
   {% endif %}
 
   {% if is_admin_manager %}
+  <h2>Usuários administrativos</h2>
+  <p>Crie um acesso interno. O novo usuário ficará disponível imediatamente na seleção de aprovador.</p>
+  <form class="admin-user-form" method="post" action="{{ url_for('admin_user_create') }}">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <div><label for="new-username">Usuário</label><input id="new-username" name="username" placeholder="nome.sobrenome" required></div>
+    <div><label for="new-name">Nome</label><input id="new-name" name="name" required></div>
+    <div><label for="new-email">E-mail</label><input id="new-email" name="email" type="email" required></div>
+    <div><label for="new-role">Perfil</label><select id="new-role" name="role" required><option value="Validador de assinaturas">Validador de assinaturas</option><option value="Administrador">Administrador</option></select></div>
+    <div><label for="new-password">Senha inicial</label><input id="new-password" name="password" type="password" minlength="10" autocomplete="new-password" required></div>
+    <label class="checkbox-label"><input name="make_validator" type="checkbox" value="1"> Definir como aprovador atual</label>
+    <button type="submit">Criar usuário</button>
+  </form>
+
   <h2>Configuração do aprovador</h2>
   <p>O usuário selecionado receberá e validará as próximas solicitações antes do envio ao colaborador.</p>
   <form class="validator-settings" method="post" action="{{ url_for('admin_validator_settings') }}">
@@ -47,7 +60,7 @@
       <label for="validator_username">Usuário aprovador</label>
       <select id="validator_username" name="validator_username" required>
         {% for user in admin_users %}
-          <option value="{{ user['username'] }}" {{ 'selected' if user['username']|lower == validator_settings['validator_username']|lower else '' }}>{{ user['name'] }} ({{ user['username'] }})</option>
+          <option value="{{ user['username'] }}" data-email="{{ user['email'] }}" {{ 'selected' if user['username']|lower == validator_settings['validator_username']|lower else '' }}>{{ user['name'] }} ({{ user['username'] }})</option>
         {% endfor %}
       </select>
     </div>
@@ -143,6 +156,14 @@
 </section>
 <script>
 (() => {
+  const validatorSelect = document.getElementById('validator_username');
+  const validatorEmail = document.getElementById('validator_email');
+  if (validatorSelect && validatorEmail) {
+    validatorSelect.addEventListener('change', () => {
+      const email = validatorSelect.selectedOptions[0]?.dataset.email;
+      if (email) validatorEmail.value = email;
+    });
+  }
   const table = document.getElementById('employees-table');
   if (!table) return;
   const body = table.tBodies[0];
