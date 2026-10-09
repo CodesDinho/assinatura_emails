@@ -345,7 +345,8 @@ def test_administrator_can_change_validator_in_admin_panel(tmp_path):
         token = login_page.text.split('name="csrf_token" value="', 1)[1].split('"', 1)[0]
         client.post("/admin/login", data={"username": "rh", "password": "rh", "csrf_token": token})
         dashboard = client.get("/admin")
-        assert "Configuração do aprovador" in dashboard.text
+        assert "Gerenciar usuários" in dashboard.text
+        assert "Configuração do aprovador" not in dashboard.text
         users_page = client.get("/admin/usuarios")
         assert 'id="admin-users-table"' in users_page.text
         assert "suporte.dinho" in users_page.text

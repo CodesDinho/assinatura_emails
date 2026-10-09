@@ -6,7 +6,6 @@
     {% if admin_is_validator() %}<a class="{{ 'active' if request.endpoint in ('admin_signature_requests', 'admin_signature_request') else '' }}" href="{{ url_for('admin_signature_requests') }}">Aprovar assinaturas pendentes</a>{% endif %}
     {% if admin_is_manager() %}
       <a class="{{ 'active' if request.endpoint in ('admin_users', 'admin_user_edit', 'admin_user_delete') else '' }}" href="{{ url_for('admin_users') }}">Gerenciar usuários</a>
-      <a class="{{ 'active' if request.endpoint == 'admin_validator_settings' else '' }}" href="{{ url_for('admin_validator_settings') }}">Configuração do aprovador (múltiplos)</a>
       <a class="{{ 'active' if request.endpoint == 'admin_import' else '' }}" href="{{ url_for('admin_import') }}">Cargas pendentes</a>
       <a class="{{ 'active' if request.endpoint == 'admin_recent_requests' else '' }}" href="{{ url_for('admin_recent_requests') }}">Solicitações recentes</a>
       <a class="{{ 'active' if request.endpoint in ('admin_collaborators', 'admin_employee_edit') else '' }}" href="{{ url_for('admin_collaborators') }}">Colaboradores</a>

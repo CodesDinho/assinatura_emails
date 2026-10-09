@@ -2,7 +2,7 @@
 {% block title %}Usuários administrativos{% endblock %}
 {% block content %}<section class="card wide-card">
   <div class="page-header"><h1>Usuários administrativos</h1><a class="button-link secondary" href="{{ url_for('admin_dashboard') }}">Voltar ao menu</a></div>
-  <p>Crie, edite ou exclua acessos. Um usuário pode ser administrador, aprovador ou ambos.</p>
+  <p>Crie, edite ou exclua acessos e configure aqui os aprovadores. Um usuário pode ser administrador, aprovador ou ambos.</p>
   <form class="admin-user-form" method="post" action="{{ url_for('admin_user_create') }}">
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
     <div><label for="new-username">Usuário</label><input id="new-username" name="username" placeholder="nome.sobrenome" required></div>
