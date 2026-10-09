@@ -89,7 +89,13 @@ def _signature_validator_required(view_func):
     @_admin_login_required
     def wrapper(*args, **kwargs):
         if not _is_signature_validator():
-            abort(403)
+            validator = get_validator_settings()
+            flash(
+                "Esta solicitação só pode ser validada pelo aprovador atual: "
+                f"{validator['validator_username']}. Saia e entre com esse usuário, "
+                "ou altere o aprovador na configuração administrativa."
+            )
+            return redirect(url_for("admin_dashboard"))
         return view_func(*args, **kwargs)
     return wrapper
 

@@ -304,6 +304,9 @@ def test_administrator_can_change_validator_in_admin_panel(tmp_path):
         client.post("/admin/login", data={"username": "rh", "password": "rh", "csrf_token": token})
         dashboard = client.get("/admin")
         assert "Configuração do aprovador" in dashboard.text
+        assert 'id="admin-users-table"' in dashboard.text
+        assert "suporte.dinho" in dashboard.text
+        assert "roberson.souza" in dashboard.text
         csrf = dashboard.text.split('name="csrf_token" value="', 1)[1].split('"', 1)[0]
         saved = client.post("/admin/configuracao/aprovador", data={
             "csrf_token": csrf,
@@ -316,6 +319,25 @@ def test_administrator_can_change_validator_in_admin_panel(tmp_path):
         settings = get_validator_settings()
     assert settings["validator_username"] == "suporte.dinho"
     assert settings["validator_email"] == "suporte@empresa.com"
+
+
+def test_wrong_logged_user_gets_validator_guidance_instead_of_forbidden(tmp_path):
+    database_path = _corporate_database(tmp_path / "corporate.db")
+    app = create_app(test_config={
+        "TESTING": True,
+        "SECRET_KEY": "test-secret",
+        "SHARED_SQLITE_PATH": str(database_path),
+        "SIGNATURE_APPROVALS_PATH": str(tmp_path / "approvals.db"),
+        "ADMIN_USERS_DB_PATH": str(tmp_path / "admin_users.db"),
+    })
+    with app.test_client() as client:
+        login_page = client.get("/admin/login")
+        token = login_page.text.split('name="csrf_token" value="', 1)[1].split('"', 1)[0]
+        client.post("/admin/login", data={"username": "suporte.dinho", "password": "suporte.dinho", "csrf_token": token})
+        response = client.get("/admin/solicitacoes/pedido-inexistente")
+        assert response.status_code == 302
+        dashboard = client.get(response.headers["Location"])
+        assert "só pode ser validada pelo aprovador atual: roberson.souza" in dashboard.text
 
 
 def test_administrator_can_create_user_and_make_it_validator(tmp_path):

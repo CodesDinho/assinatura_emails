@@ -51,6 +51,22 @@
     <label class="checkbox-label"><input name="make_validator" type="checkbox" value="1"> Definir como aprovador atual</label>
     <button type="submit">Criar usuário</button>
   </form>
+  <div class="table-wrapper compact-table"><table id="admin-users-table">
+    <thead><tr><th>Nome</th><th>Usuário</th><th>E-mail</th><th>Perfil</th><th>Aprovador atual</th></tr></thead>
+    <tbody>
+    {% for user in admin_users %}
+      <tr>
+        <td>{{ user['name'] }}</td>
+        <td>{{ user['username'] }}</td>
+        <td>{{ user['email'] or '—' }}</td>
+        <td>{{ user['role'] }}</td>
+        <td>{% if user['username']|lower == validator_settings['validator_username']|lower %}<span class="signature-state generated">Sim</span>{% else %}<span class="signature-state pending">Não</span>{% endif %}</td>
+      </tr>
+    {% else %}
+      <tr><td colspan="5">Nenhum usuário administrativo ativo.</td></tr>
+    {% endfor %}
+    </tbody>
+  </table></div>
 
   <h2>Configuração do aprovador</h2>
   <p>O usuário selecionado receberá e validará as próximas solicitações antes do envio ao colaborador.</p>
