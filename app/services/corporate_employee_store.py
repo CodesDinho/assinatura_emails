@@ -6,10 +6,6 @@ import os
 from pathlib import Path
 import sqlite3
 
-from app.services.employee_importer import EMAIL_PATTERN
-from app.services.employee_override_store import load_employee_overrides
-
-
 DEFAULT_DATABASE_PATH = Path("/shared/slack_apps.db")
 NOT_EQUALIZED_MESSAGE = (
     "A base de dados ainda não está equalizada. Solicite à TI que execute a rotina no projeto de "
@@ -99,9 +95,6 @@ def _employee(row: sqlite3.Row) -> dict:
         "company": row["razao_social"] or "",
         "lorac_upn": row["sharepoint_upn"] or "",
         "sharepoint_active": bool(row["sharepoint_ativo"]),
-        "overridden": False,
-        "override_updated_by": "",
-        "override_updated_at": "",
         "source_registration": str(row["mat"] or ""),
         "source_name": row["nome"],
     }
@@ -119,45 +112,10 @@ def _base_employees() -> list[dict]:
             ORDER BY employee.nome COLLATE NOCASE
             """
         ).fetchall()
-    return [_employee(row) for row in rows]
-
-
-def _override_matches_source(employee: dict, override: dict) -> bool:
-    stored_registration = str(override.get("source_registration") or "").strip()
-    if stored_registration:
-        return stored_registration == employee["source_registration"]
-    return str(override.get("source_name") or "").strip().casefold() == employee["source_name"].strip().casefold()
-
-
-def _merged_employees() -> list[dict]:
-    employees = _base_employees()
-    overrides = load_employee_overrides()
+    employees = [_employee(row) for row in rows]
+    active_email_counts: dict[str, int] = {}
     for employee in employees:
-        override = overrides.get(employee["id"])
-        if not override or not _override_matches_source(employee, override):
-            continue
-        employee.update(
-            full_name=override["full_name"],
-            job_title=override["job_title"],
-            email=(override["email"] or "").strip().lower(),
-            phone=override["phone"] or "",
-            active=bool(override["active"]),
-            registration=override["registration"] or "",
-            company=override["company"] or "",
-            status_validation="CORREÇÃO ADMINISTRATIVA",
-            overridden=True,
-            override_updated_by=override["updated_by"],
-            override_updated_at=override["updated_at"],
-        )
-        employee["deleted"] = bool(override.get("deleted", 0))
-        employee["email_ready"] = bool(EMAIL_PATTERN.fullmatch(employee["email"]))
-
-    for employee in employees:
-        employee.setdefault("deleted", False)
-
-    active_email_counts = {}
-    for employee in employees:
-        if not employee["deleted"] and employee["active"] and employee["email"] and employee["email_ready"]:
+        if employee["active"] and employee["email"] and employee["email_ready"]:
             active_email_counts[employee["email"]] = active_email_counts.get(employee["email"], 0) + 1
     for employee in employees:
         employee["duplicate_email"] = (
@@ -169,7 +127,7 @@ def _merged_employees() -> list[dict]:
 
 
 def list_employees(*, active_only: bool = True) -> list[dict]:
-    employees = [employee for employee in _merged_employees() if not employee["deleted"]]
+    employees = _base_employees()
     if active_only:
         employees = [employee for employee in employees if employee["active"]]
     return sorted(employees, key=lambda employee: employee["full_name"].casefold())
@@ -178,8 +136,8 @@ def list_employees(*, active_only: bool = True) -> list[dict]:
 def find_employee_by_id(employee_id: int) -> dict | None:
     return next(
         (
-            employee for employee in _merged_employees()
-            if employee["id"] == employee_id and not employee["deleted"]
+            employee for employee in _base_employees()
+            if employee["id"] == employee_id
         ),
         None,
     )
@@ -192,8 +150,8 @@ def find_employee_by_email(
     if not normalized:
         return None
     matches = [
-        employee for employee in _merged_employees()
-        if not employee["deleted"] and employee["email"] == normalized
+        employee for employee in _base_employees()
+        if employee["email"] == normalized
     ]
     if active_only:
         matches = [employee for employee in matches if employee["active"]]

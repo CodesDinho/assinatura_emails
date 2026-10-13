@@ -19,13 +19,16 @@ A página pública fica em `http://localhost:5000`. A área interna fica em `htt
 O container roda como usuário sem privilégios e não inclui `.env`, banco ou planilhas na imagem. O
 GitHub Actions testa o projeto e publica imagens imutáveis no GHCR. O Portainer do servidor
 `10.1.1.153` executa a stack na porta `8505`, usando os volumes externos
-`assinatura-emails-data` (cargas pendentes e rollback legado) e `assinatura-emails-instance` (logs e arquivos temporários).
+`assinatura-emails-data` (cargas pendentes) e `assinatura-emails-instance` (logs e arquivos temporários).
 
 A stack monta `/home/administrator/Desktop/codes/ti_dinho_slack/shared_data` em `/shared:ro` e lê `/shared/slack_apps.db`. O serviço só fica saudável quando existem `rh_importacoes`, a view `rh_assinaturas_colaboradores` e uma publicação `PUBLICADO`. Verifique em `http://10.1.1.153:8505/health`.
 
-O upload administrativo apenas valida e guarda o arquivo em `/app/data/pending_imports`; ele não grava no SQLite nem altera vínculos publicados. Para efetivar uma carga, solicite à TI a etapa 4 — Analisar Email/SharePoint x RH — no projeto de equalização e a publicação da prévia homologada. A variável `EMPLOYEE_WORKBOOK_PATH` existe somente para rollback controlado e não participa do fluxo normal.
+O upload administrativo apenas valida e guarda o arquivo em `/app/data/pending_imports`; ele não grava no SQLite nem altera vínculos publicados. Para efetivar uma carga, solicite à TI a etapa 4 — Analisar Email/SharePoint x RH — no projeto de equalização e a publicação da prévia homologada.
 
-Correções feitas em **Editar** na área administrativa são gravadas em `/app/instance/employee_overrides.db` e aplicadas sobre a publicação somente para este sistema. O banco corporativo permanece intacto; a origem também deve ser corrigida pelo RH para que futuras publicações tragam o dado correto.
+A listagem administrativa é somente leitura e exibe ID central, matrícula RH, nome, cargo, empresa,
+e-mail e celular diretamente da view. Não existe sobreposição por planilha ou
+`employee_overrides.db`. Correções devem ser feitas no fluxo central RH/Lorac; este container nunca
+escreve em `/shared`.
 
 Uma nova publicação não apaga o histórico do SQLite: atualiza ou inclui os colaboradores da carga e
 marca como inativos os ausentes. Identidades técnicas repetidas devem impedir a publicação. Além

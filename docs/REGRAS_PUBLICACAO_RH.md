@@ -32,15 +32,12 @@ Um e-mail corporativo válido não pode estar associado a mais de um colaborador
 Como defesa adicional, o sistema de assinaturas também bloqueia consulta e envio quando encontra o
 mesmo e-mail em mais de um colaborador ativo.
 
-## Edições e exclusões locais
+## Administração somente leitura
 
-As ações **Editar** e **Excluir** da área administrativa não alteram o SQLite corporativo, que é
-montado como somente leitura. Elas criam correções persistentes em
-`/app/instance/employee_overrides.db`, aplicadas somente neste sistema.
-
-- **Editar** substitui os campos exibidos pelo sistema de assinaturas.
-- **Excluir** oculta o colaborador neste sistema, mas não apaga o registro corporativo.
-- A correção definitiva deve ser feita pelo RH e entrar em uma nova publicação homologada.
+A área administrativa não cria, edita, exclui nem sobrepõe colaboradores. Ela lê diretamente a
+view `rh_assinaturas_colaboradores`. Nome, cargo, empresa, matrícula e situação são corrigidos pela
+publicação RH; e-mail, SharePoint e vínculos são corrigidos pelo fluxo central RH/Lorac. O volume
+`/shared` permanece montado como somente leitura.
 
 ## Critérios mínimos antes da publicação
 

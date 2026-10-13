@@ -683,18 +683,21 @@ def test_admin_dashboard_marks_generated_signature_and_has_sortable_headers(tmp_
         assert 'data-column="0"' in dashboard.text
         assert "Assinatura gerada" in dashboard.text
         assert 'class="signature-state generated">Sim' in dashboard.text
-        assert 'class="signature-state inactive">Inativo' in dashboard.text
         assert 'class="signature-state not-generated">Não' in dashboard.text
+        assert "Pessoa Inativa" not in dashboard.text
+        assert "ID central" in dashboard.text
+        assert "Matrícula RH" in dashboard.text
+        assert "/shared/slack_apps.db" in dashboard.text
         assert "Cobertura Lorac" in dashboard.text
         assert "Total com Lorac ativo" in dashboard.text
         assert "Com e-mail validado" in dashboard.text
         assert "Pendências" in dashboard.text
         assert "Identidade Lorac" not in dashboard.text
-        assert ">Editar</a>" in dashboard.text
-        assert ">Excluir</button>" in dashboard.text
+        assert ">Editar</a>" not in dashboard.text
+        assert ">Excluir</button>" not in dashboard.text
 
 
-def test_admin_can_remove_wrong_duplicate_email_without_changing_corporate_database(tmp_path):
+def test_admin_corporate_data_is_read_only_and_duplicate_remains_blocked(tmp_path):
     database_path = _corporate_database(tmp_path / "corporate.db")
     with sqlite3.connect(database_path) as connection:
         connection.execute(
@@ -702,13 +705,11 @@ def test_admin_can_remove_wrong_duplicate_email_without_changing_corporate_datab
             (4, "Roberson Souza", "Coordenador de T.I.", "maria@empresa.com", "2222", "SIM", 1, 1, "APTO", "4", "Empresa", "roberson@lorac.test", 1),
         )
     corporate_before = database_path.read_bytes()
-    overrides_path = tmp_path / "employee_overrides.db"
     users_path = Path(__file__).resolve().parent.parent / "config" / "users.json"
     app = create_app(test_config={
         "TESTING": True,
         "SECRET_KEY": "test-secret",
         "SHARED_SQLITE_PATH": str(database_path),
-        "EMPLOYEE_OVERRIDES_PATH": str(overrides_path),
         "ADMIN_USERS_PATH": str(users_path),
         "ADMIN_USERS_DB_PATH": str(tmp_path / "admin_users.db"),
         "REQUEST_LOG_PATH": str(tmp_path / "requests.jsonl"),
@@ -721,25 +722,9 @@ def test_admin_can_remove_wrong_duplicate_email_without_changing_corporate_datab
         login_page = client.get("/admin/login")
         token = login_page.text.split('name="csrf_token" value="', 1)[1].split('"', 1)[0]
         client.post("/admin/login", data={"username": "rh", "password": "rh", "csrf_token": token})
-        edit_page = client.get("/admin/colaboradores/1/editar")
+        edit_page = client.get("/admin/colaboradores/1/editar", follow_redirects=True)
         assert edit_page.status_code == 200
-        token = edit_page.text.split('name="csrf_token" value="', 1)[1].split('"', 1)[0]
-        saved = client.post("/admin/colaboradores/1/editar", data={
-            "csrf_token": token,
-            "full_name": "Maria Teste",
-            "job_title": "Analista",
-            "email": "",
-            "phone": "1111",
-            "registration": "1",
-            "company": "Empresa",
-            "active": "1",
-        }, follow_redirects=True)
-        assert saved.status_code == 200
-        assert "atualizados com segurança" in saved.text
-        assert "corrigido" in saved.text
-
-        available = client.post("/consultar", data={"email": "maria@empresa.com"})
-        assert "Roberson Souza" in available.text
+        assert "somente leitura" in edit_page.text
 
         dashboard = client.get("/admin")
         token = dashboard.text.split('name="csrf_token" value="', 1)[1].split('"', 1)[0]
@@ -748,11 +733,11 @@ def test_admin_can_remove_wrong_duplicate_email_without_changing_corporate_datab
             data={"csrf_token": token},
             follow_redirects=True,
         )
-        assert "Registro de Roberson Souza excluído deste sistema" in deleted.text
-        unavailable = client.post("/consultar", data={"email": "maria@empresa.com"})
-        assert "Nenhum cadastro ativo" in unavailable.text
+        assert "controlada pela publicação RH central" in deleted.text
+        still_blocked = client.post("/consultar", data={"email": "maria@empresa.com"})
+        assert "vinculado a mais de um colaborador ativo" in still_blocked.text
 
-    assert overrides_path.exists()
+    assert not (tmp_path / "employee_overrides.db").exists()
     assert database_path.read_bytes() == corporate_before
 
 

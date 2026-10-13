@@ -21,12 +21,10 @@ from app.services.employee_importer import (
 from app.services.corporate_employee_store import (
     equalization_status,
     find_employee_by_email,
-    find_employee_by_id,
     list_employees,
     lorac_coverage,
     readiness_summary,
 )
-from app.services.employee_override_store import delete_employee_override, save_employee_override
 from app.services.pending_import_store import list_pending_imports, save_pending_import
 from app.services.request_log import append_request_log, recent_request_logs, successful_request_emails
 from app.services.signature_generator import generate_signature_image
@@ -351,7 +349,7 @@ def register_routes(app):
         summary = {"active": 0, "ready": 0, "missing_email": 0}
         lorac = {"total": 0, "ready": 0, "pending": [], "pending_count": 0, "coverage_percent": 100.0}
         if status["equalized"]:
-            rows = list_employees(active_only=False)
+            rows = list_employees(active_only=True)
             summary = readiness_summary()
             lorac = lorac_coverage()
         generated_emails = successful_request_emails(current_app.config["REQUEST_LOG_PATH"])
@@ -636,141 +634,34 @@ def register_routes(app):
     @app.route("/admin/colaboradores/<int:employee_id>/editar", methods=["GET", "POST"])
     @_admin_manager_required
     def admin_employee_edit(employee_id):
-        status = equalization_status()
-        if not status["equalized"]:
-            flash(status["message"])
-            return redirect(url_for("admin_collaborators"))
-        employee = find_employee_by_id(employee_id)
-        if not employee:
-            flash("Colaborador não encontrado na publicação corporativa atual.")
-            return redirect(url_for("admin_collaborators"))
-        if request.method == "GET":
-            return render_template("admin_employee_form.html", employee=employee, is_new=False)
-        if not _valid_csrf():
-            flash("A sessão expirou. Tente novamente.")
-            return render_template("admin_employee_form.html", employee=employee, is_new=False), 400
-
-        edited = {
-            **employee,
-            "full_name": normalize_text(request.form.get("full_name")),
-            "job_title": normalize_text(request.form.get("job_title")),
-            "email": normalize_email(request.form.get("email")),
-            "phone": normalize_text(request.form.get("phone")),
-            "registration": normalize_text(request.form.get("registration")),
-            "company": normalize_text(request.form.get("company")),
-            "active": request.form.get("active") == "1",
-        }
-        issues = validate_employee_row(edited, require_email=False)
-        if len(edited["phone"]) > 30:
-            issues["phone"] = "Informe um celular com até 30 caracteres."
-        if edited["email"] and edited["active"]:
-            conflict = next(
-                (
-                    item for item in list_employees(active_only=True)
-                    if item["id"] != employee_id and item["email"] == edited["email"]
-                ),
-                None,
-            )
-            if conflict:
-                issues["email"] = (
-                    f"Este e-mail já está vinculado ao colaborador {conflict['full_name']}. "
-                    "Remova-o desse cadastro antes de atribuí-lo aqui."
-                )
-        if issues:
-            return render_template(
-                "admin_employee_form.html", employee=edited, issues=issues, is_new=False
-            ), 400
-
-        save_employee_override(
-            employee_id,
-            employee,
-            edited,
-            session["admin_user"]["username"],
+        flash(
+            "Os dados corporativos são somente leitura neste sistema. "
+            "Faça a correção no fluxo RH/Lorac da base central."
         )
-        flash(f"Dados de {edited['full_name']} atualizados com segurança.")
         return redirect(url_for("admin_collaborators"))
 
     @app.route("/admin/colaboradores/<int:employee_id>/excluir", methods=["POST"])
     @_admin_manager_required
     def admin_employee_delete(employee_id):
-        if not _valid_csrf():
-            flash("A sessão expirou. Nenhum registro foi excluído.")
-            return redirect(url_for("admin_collaborators"))
-        status = equalization_status()
-        if not status["equalized"]:
-            flash(status["message"])
-            return redirect(url_for("admin_collaborators"))
-        employee = find_employee_by_id(employee_id)
-        if not employee:
-            flash("Colaborador não encontrado ou já excluído.")
-            return redirect(url_for("admin_collaborators"))
-        delete_employee_override(
-            employee_id,
-            employee,
-            session["admin_user"]["username"],
-        )
         flash(
-            f"Registro de {employee['full_name']} excluído deste sistema. "
-            "O banco corporativo do RH não foi alterado."
+            "Colaboradores não podem ser excluídos no projeto de assinaturas. "
+            "A situação ativo/inativo é controlada pela publicação RH central."
         )
         return redirect(url_for("admin_collaborators"))
 
     @app.route("/admin/colaboradores/excluir-inativos", methods=["POST"])
     @_admin_manager_required
     def admin_employees_delete_inactive():
-        if not _valid_csrf():
-            flash("A sessão expirou. Nenhum registro foi excluído.")
-            return redirect(url_for("admin_collaborators"))
-        status = equalization_status()
-        if not status["equalized"]:
-            flash(status["message"])
-            return redirect(url_for("admin_collaborators"))
-
-        selected_ids = {value for value in request.form.getlist("employee_ids") if value.isdigit()}
-        employees = [
-            employee for employee in list_employees(active_only=False)
-            if str(employee["id"]) in selected_ids and not employee["active"]
-        ]
-        for employee in employees:
-            delete_employee_override(
-                employee["id"], employee, session["admin_user"]["username"]
-            )
-        if employees:
-            flash(
-                f"{len(employees)} colaborador(es) inativo(s) excluído(s) deste sistema. "
-                "O banco corporativo do RH não foi alterado."
-            )
-        else:
-            flash("Selecione ao menos um colaborador inativo para excluir.")
+        flash("A situação dos colaboradores é controlada exclusivamente pela base RH central.")
         return redirect(url_for("admin_collaborators"))
 
     @app.route("/admin/colaboradores/limpar-emails-duplicados", methods=["POST"])
     @_admin_manager_required
     def admin_employees_clear_duplicate_emails():
-        if not _valid_csrf():
-            flash("A sessão expirou. Nenhum e-mail foi limpo.")
-            return redirect(url_for("admin_collaborators"))
-        status = equalization_status()
-        if not status["equalized"]:
-            flash(status["message"])
-            return redirect(url_for("admin_collaborators"))
-
-        selected_ids = {value for value in request.form.getlist("employee_ids") if value.isdigit()}
-        employees = [
-            employee for employee in list_employees(active_only=False)
-            if str(employee["id"]) in selected_ids and employee["duplicate_email"]
-        ]
-        for employee in employees:
-            save_employee_override(
-                employee["id"],
-                employee,
-                {**employee, "email": ""},
-                session["admin_user"]["username"],
-            )
-        if employees:
-            flash(f"E-mail removido de {len(employees)} colaborador(es) com duplicidade.")
-        else:
-            flash("Selecione ao menos um colaborador com e-mail duplicado para limpar.")
+        flash(
+            "E-mails corporativos não são alterados localmente. "
+            "Use a revisão RH/Lorac na base central."
+        )
         return redirect(url_for("admin_collaborators"))
 
     @app.route("/admin/import", methods=["GET", "POST"])
