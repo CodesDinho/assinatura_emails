@@ -702,7 +702,13 @@ def test_admin_dashboard_marks_generated_signature_and_has_sortable_headers(tmp_
         client.post("/admin/login", data={"username": "rh", "password": "rh", "csrf_token": token})
         dashboard = client.get("/admin/colaboradores")
         assert dashboard.status_code == 200
-        assert 'data-column="0"' in dashboard.text
+        assert 'class="sort-button"' in dashboard.text
+        assert 'data-column="0" data-type="number"' in dashboard.text
+        assert 'id="employee-search"' in dashboard.text
+        assert 'id="employee-job-filter"' in dashboard.text
+        assert 'id="employee-company-filter"' in dashboard.text
+        assert 'id="employee-signature-filter"' in dashboard.text
+        assert dashboard.text.count("data-table-bordered") >= 2
         assert "Assinatura gerada" in dashboard.text
         assert 'class="signature-state generated">Sim' in dashboard.text
         assert 'class="signature-state not-generated">Não' in dashboard.text

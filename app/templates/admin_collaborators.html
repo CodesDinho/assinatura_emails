@@ -1,14 +1,8 @@
 {% extends 'base.html' %}
 {% block title %}Colaboradores{% endblock %}
 {% block content %}
-<section class="card wide-card" data-column="0">
-  <div class="page-header">
-    <div>
-      <h1>Colaboradores ativos — base RH central</h1>
-      <p>Total ativo: {{ active }} | Aptos: {{ ready }} | Sem e-mail válido: {{ missing_email }}</p>
-    </div>
-    <a class="button-link secondary" href="{{ url_for('admin_dashboard') }}">Voltar ao menu</a>
-  </div>
+<section class="card wide-card">
+  <div class="page-header"><div><h1>Colaboradores ativos — base RH central</h1><p>Total ativo: {{ active }} | Aptos: {{ ready }} | Sem e-mail válido: {{ missing_email }}</p></div><a class="button-link secondary" href="{{ url_for('admin_dashboard') }}">Voltar ao menu</a></div>
   <h2>Base corporativa</h2>
   {% if corporate_status['equalized'] %}
     <p>Última publicação: {{ corporate_status['latest']['imported_at'] }} | Arquivo: {{ corporate_status['latest']['arquivo_origem'] }} | Responsável: {{ corporate_status['latest']['imported_by'] }}</p>
@@ -16,20 +10,54 @@
     <p>Esta tela é somente leitura. Correções de RH, e-mail e SharePoint devem ser feitas no fluxo central RH/Lorac.</p>
   {% else %}<p class="error">{{ corporate_status['message'] }}</p>{% endif %}
   <h2>Cobertura Lorac</h2>
-  <div class="table-wrapper compact-table"><table class="summary-table"><thead><tr><th>Total com Lorac ativo</th><th>Com e-mail validado</th><th>Pendências</th><th>Cobertura</th></tr></thead><tbody><tr><td>{{ lorac_coverage['total'] }}</td><td>{{ lorac_coverage['ready'] }}</td><td>{{ lorac_coverage['pending_count'] }}</td><td>{{ lorac_coverage['coverage_percent'] }}%</td></tr></tbody></table></div>
-  <div class="table-wrapper"><table id="employees-table"><thead><tr><th>ID central</th><th>Matrícula RH</th><th>Nome</th><th>Cargo</th><th>Empresa</th><th>E-mail</th><th>Celular</th><th>Assinatura gerada</th></tr></thead><tbody>
-  {% for employee in employees %}
-    <tr>
-      <td>{{ employee['id'] }}</td>
-      <td>{{ employee['registration'] or '—' }}</td>
-      <td>{{ employee['full_name'] }}</td>
-      <td>{{ employee['job_title'] or '—' }}</td>
-      <td>{{ employee['company'] or '—' }}</td>
-      <td>{{ employee['email'] or '—' }}{% if not employee['email_ready'] %} <span class="error">(não apto)</span>{% endif %}</td>
-      <td>{{ employee['phone'] or '—' }}</td>
-      <td><span class="signature-state {{ 'generated' if employee['signature_generated'] else 'not-generated' }}">{{ 'Sim' if employee['signature_generated'] else 'Não' }}</span></td>
-    </tr>
+  <div class="table-wrapper compact-table data-table-bordered"><table class="summary-table"><thead><tr><th>Total com Lorac ativo</th><th>Com e-mail validado</th><th>Pendências</th><th>Cobertura</th></tr></thead><tbody><tr><td>{{ lorac_coverage['total'] }}</td><td>{{ lorac_coverage['ready'] }}</td><td>{{ lorac_coverage['pending_count'] }}</td><td>{{ lorac_coverage['coverage_percent'] }}%</td></tr></tbody></table></div>
+  <div class="employee-filters" aria-label="Filtros rápidos de colaboradores">
+    <label>Pesquisa rápida<input id="employee-search" type="search" placeholder="Nome, matrícula, cargo, empresa, e-mail..."></label>
+    <label>Cargo<select id="employee-job-filter"><option value="">Todos</option></select></label>
+    <label>Empresa<select id="employee-company-filter"><option value="">Todas</option></select></label>
+    <label>Assinatura<select id="employee-signature-filter"><option value="">Todas</option><option value="sim">Gerada</option><option value="não">Não gerada</option></select></label>
+    <button id="clear-employee-filters" class="secondary" type="button">Limpar filtros</button>
+  </div>
+  <p id="employee-filter-count" class="field-help" aria-live="polite"></p>
+  <div class="table-wrapper data-table-bordered"><table id="employees-table"><thead><tr><th><button class="sort-button" type="button" data-column="0" data-type="number">ID central</button></th><th><button class="sort-button" type="button" data-column="1">Matrícula RH</button></th><th><button class="sort-button" type="button" data-column="2">Nome</button></th><th><button class="sort-button" type="button" data-column="3">Cargo</button></th><th><button class="sort-button" type="button" data-column="4">Empresa</button></th><th><button class="sort-button" type="button" data-column="5">E-mail</button></th><th><button class="sort-button" type="button" data-column="6">Celular</button></th><th><button class="sort-button" type="button" data-column="7">Assinatura gerada</button></th></tr></thead><tbody>
+  {% for employee in employees %}<tr><td>{{ employee['id'] }}</td><td>{{ employee['registration'] or '—' }}</td><td>{{ employee['full_name'] }}</td><td>{{ employee['job_title'] or '—' }}</td><td>{{ employee['company'] or '—' }}</td><td>{{ employee['email'] or '—' }}{% if not employee['email_ready'] %} <span class="error">(não apto)</span>{% endif %}</td><td>{{ employee['phone'] or '—' }}</td><td><span class="signature-state {{ 'generated' if employee['signature_generated'] else 'not-generated' }}">{{ 'Sim' if employee['signature_generated'] else 'Não' }}</span></td></tr>
   {% else %}<tr><td colspan="8">Nenhum colaborador ativo disponível.</td></tr>{% endfor %}
   </tbody></table></div>
 </section>
+<script>
+(() => {
+  const table = document.getElementById('employees-table');
+  const body = table.querySelector('tbody');
+  const rows = [...body.querySelectorAll('tr')].filter(row => row.cells.length === 8);
+  const search = document.getElementById('employee-search');
+  const job = document.getElementById('employee-job-filter');
+  const company = document.getElementById('employee-company-filter');
+  const signature = document.getElementById('employee-signature-filter');
+  const count = document.getElementById('employee-filter-count');
+  const normalize = value => value.trim().toLocaleLowerCase('pt-BR');
+  const fillOptions = (select, column) => [...new Set(rows.map(row => row.cells[column].textContent.trim()).filter(value => value && value !== '—'))]
+    .sort((a, b) => a.localeCompare(b, 'pt-BR')).forEach(value => select.add(new Option(value, normalize(value))));
+  fillOptions(job, 3); fillOptions(company, 4);
+  const applyFilters = () => {
+    let visible = 0;
+    rows.forEach(row => {
+      const matches = (!normalize(search.value) || normalize(row.textContent).includes(normalize(search.value)))
+        && (!job.value || normalize(row.cells[3].textContent) === job.value)
+        && (!company.value || normalize(row.cells[4].textContent) === company.value)
+        && (!signature.value || normalize(row.cells[7].textContent) === signature.value);
+      row.hidden = !matches; if (matches) visible += 1;
+    });
+    count.textContent = `${visible} de ${rows.length} colaborador(es) exibido(s)`;
+  };
+  [search, job, company, signature].forEach(control => control.addEventListener('input', applyFilters));
+  document.getElementById('clear-employee-filters').addEventListener('click', () => { search.value = job.value = company.value = signature.value = ''; applyFilters(); search.focus(); });
+  table.querySelectorAll('.sort-button').forEach(button => button.addEventListener('click', () => {
+    const column = Number(button.dataset.column); const ascending = button.dataset.direction !== 'asc';
+    table.querySelectorAll('.sort-button').forEach(item => { item.dataset.direction = ''; item.removeAttribute('aria-sort'); item.textContent = item.textContent.replace(/ [▲▼]$/, ''); });
+    button.dataset.direction = ascending ? 'asc' : 'desc'; button.setAttribute('aria-sort', ascending ? 'ascending' : 'descending'); button.textContent += ascending ? ' ▲' : ' ▼';
+    rows.sort((left, right) => { const a = left.cells[column].textContent.trim(); const b = right.cells[column].textContent.trim(); const comparison = button.dataset.type === 'number' ? Number(a) - Number(b) : a.localeCompare(b, 'pt-BR', { numeric: true, sensitivity: 'base' }); return ascending ? comparison : -comparison; }).forEach(row => body.appendChild(row));
+  }));
+  applyFilters();
+})();
+</script>
 {% endblock %}
