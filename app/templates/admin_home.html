@@ -5,5 +5,13 @@
   <h1>Área administrativa</h1>
   <p>Olá, {{ session['admin_user']['name'] }}. Use o menu lateral para acessar as funcionalidades.</p>
   {% if is_signature_validator %}<div class="alert notice"><strong>{{ pending_approval_count }}</strong> assinatura(s) aguardando análise. <a href="{{ url_for('admin_signature_requests') }}">Abrir aprovações pendentes</a>.</div>{% endif %}
+  <h2>Base corporativa RH</h2>
+  {% if corporate_status.equalized %}
+    <div class="alert notice">Leitura direta da publicação central, sem sincronização manual neste projeto.</div>
+    <p><strong>Última publicação:</strong> {{ corporate_status.latest.imported_at }} — {{ corporate_status.latest.source_filename }} — {{ corporate_status.latest.imported_by }}</p>
+    <p><strong>{{ readiness.active }}</strong> ativos · <strong>{{ readiness.ready }}</strong> aptos para assinatura · <strong>{{ readiness.missing_email }}</strong> sem e-mail válido</p>
+  {% else %}
+    <div class="alert error"><strong>Base indisponível:</strong> {{ corporate_status.message }}</div>
+  {% endif %}
 </section>
 {% endblock %}

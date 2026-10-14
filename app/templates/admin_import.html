@@ -12,8 +12,23 @@
     <label for="file">Arquivo CSV/XLSX</label>
     <input id="file" name="file" type="file" accept=".csv,.xlsx,.xlsm" required>
     <p id="selected-file" class="field-help">Nenhum arquivo selecionado.</p>
-    <button id="import-button" type="submit">Validar e registrar como pendente</button>
+    <input type="hidden" name="action" value="validate">
+    <button id="import-button" type="submit">Validar arquivo</button>
   </form>
+
+  {% if staged_import %}
+    <div class="alert notice">
+      <strong>Validação concluída; confirme antes de encaminhar.</strong><br>
+      {{ staged_import.row_count }} registros · {{ staged_import.valid_email_count }} com e-mail válido · {{ staged_import.missing_email_count }} sem e-mail.
+      Esta confirmação não publica nem altera a base corporativa.
+    </div>
+    <form method="post">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <input type="hidden" name="action" value="confirm">
+      <input type="hidden" name="stored_name" value="{{ staged_import.stored_name }}">
+      <button type="submit">Confirmar carga pendente</button>
+    </form>
+  {% endif %}
 
   <h2>Cargas pendentes atuais</h2>
   <ul>{% for item in pending_imports %}<li>{{ item['uploaded_at'] }} — {{ item['filename'] }} — {{ item['uploaded_by'] }} — {{ item['row_count'] }} registros — {{ item['status'] }}</li>{% else %}<li>Nenhuma carga pendente.</li>{% endfor %}</ul>

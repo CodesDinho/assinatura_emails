@@ -25,7 +25,7 @@ from app.services.corporate_employee_store import (
     lorac_coverage,
     readiness_summary,
 )
-from app.services.pending_import_store import list_pending_imports, save_pending_import
+from app.services.pending_import_store import confirm_pending_import, list_pending_imports, save_pending_import
 from app.services.request_log import append_request_log, recent_request_logs, successful_request_emails
 from app.services.signature_generator import generate_signature_image
 from app.services.signature_approval_store import (
@@ -334,11 +334,17 @@ def register_routes(app):
     @_admin_login_required
     def admin_dashboard():
         approvals = list_signature_requests()
+        corporate_status = equalization_status()
+        readiness = {"active": 0, "ready": 0, "missing_email": 0}
+        if corporate_status["equalized"]:
+            readiness = readiness_summary()
         return render_template(
             "admin_home.html",
             is_signature_validator=_is_signature_validator(),
             is_admin_manager=_is_admin_manager(),
             pending_approval_count=sum(1 for item in approvals if item["status"] in {"pending", "failed"}),
+            corporate_status=corporate_status,
+            readiness=readiness,
         )
 
     @app.route("/admin/colaboradores")
@@ -672,6 +678,21 @@ def register_routes(app):
             if not _valid_csrf():
                 flash("A sessão expirou. Tente novamente.")
                 return render_template("admin_import.html", pending_imports=pending_imports), 400
+            if request.form.get("action") == "confirm":
+                try:
+                    result = confirm_pending_import(
+                        current_app.config["PENDING_IMPORTS_PATH"],
+                        request.form.get("stored_name", ""),
+                        uploaded_by=session["admin_user"]["username"],
+                    )
+                except (OSError, ValueError) as exc:
+                    flash(str(exc))
+                    return redirect(url_for("admin_import"))
+                flash(
+                    f"Carga pendente confirmada: {result['filename']} — {result['row_count']} colaboradores. "
+                    "A base corporativa não foi alterada; a TI deve homologar e publicar a carga no projeto de equalização."
+                )
+                return redirect(url_for("admin_import"))
             uploaded = request.files.get("file")
             if not uploaded or not uploaded.filename:
                 flash("Selecione um arquivo CSV ou XLSX.")
@@ -706,17 +727,14 @@ def register_routes(app):
                 filename,
                 uploaded_by=session["admin_user"]["username"],
                 row_count=len(preview),
+                valid_email_count=len(preview) - without_email,
+                missing_email_count=without_email,
+                status="AGUARDANDO_CONFIRMACAO",
             )
-            message = (
-                f"Carga pendente recebida: {filename} — {len(preview)} colaboradores analisados. "
-                f"Arquivo confirmado: {result['sha256'][:12]}. Ela não alterou a base corporativa. "
-                "Solicite à TI que execute a etapa 4 — Analisar Email/SharePoint x RH no projeto de "
-                "equalização e publique a prévia homologada."
+            return render_template(
+                "admin_import.html", preview=preview[:20], staged_import=result,
+                pending_imports=list_pending_imports(current_app.config["PENDING_IMPORTS_PATH"]),
             )
-            if without_email:
-                message += f" {without_email} registro(s) ainda estão sem e-mail."
-            flash(message)
-            return redirect(url_for("admin_import"))
         return render_template("admin_import.html", pending_imports=pending_imports)
 
     @app.route("/admin/logout", methods=["POST"])

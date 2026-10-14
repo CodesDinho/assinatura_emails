@@ -12,6 +12,7 @@ venv/
 assets/*.png
 assets/*.jpg
 *.bak
+data/
 data/*.xlsx
 data/*.xlsm
 data/*.pptx
