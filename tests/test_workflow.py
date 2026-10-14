@@ -283,7 +283,7 @@ def test_signature_is_sent_to_sqlite_email_only_after_validator_approval(tmp_pat
             data={"username": "roberson.souza", "password": "roberson.souza", "csrf_token": login_token},
         )
         assert login.headers["Location"].endswith(f"/admin/solicitacoes/{request_id}")
-        assert client.get("/admin/import").status_code == 200
+        assert client.get("/admin/import").status_code == 404
         review = client.get(login.headers["Location"])
         assert "Aprovar e enviar ao solicitante" in review.text
         assert "Não aprovar" in review.text
@@ -573,10 +573,7 @@ def test_xlsx_import_replaces_entire_base_and_preserves_every_column(tmp_path):
     assert result["size"] == workbook_path.stat().st_size
 
 
-def test_admin_area_lists_pending_upload_without_changing_published_links(tmp_path):
-    from io import BytesIO
-    from openpyxl import Workbook
-
+def test_admin_has_no_local_employee_upload(tmp_path):
     database_path = _corporate_database(tmp_path / "corporate.db")
     before = database_path.read_bytes()
     users_path = Path(__file__).resolve().parent.parent / "config" / "users.json"
@@ -584,7 +581,6 @@ def test_admin_area_lists_pending_upload_without_changing_published_links(tmp_pa
         "TESTING": True,
         "SECRET_KEY": "test-secret",
         "SHARED_SQLITE_PATH": str(database_path),
-        "PENDING_IMPORTS_PATH": str(tmp_path / "pending"),
         "ADMIN_USERS_PATH": str(users_path),
         "ADMIN_USERS_DB_PATH": str(tmp_path / "admin_users.db"),
         "REQUEST_LOG_PATH": str(tmp_path / "requests.jsonl"),
@@ -598,36 +594,17 @@ def test_admin_area_lists_pending_upload_without_changing_published_links(tmp_pa
         login = client.post("/admin/login", data={"username": "rh", "password": "rh", "csrf_token": token})
         assert login.status_code == 302
 
-        page = client.get("/admin/import")
-        token = page.text.split('name="csrf_token" value="', 1)[1].split('"', 1)[0]
-        workbook = Workbook()
-        workbook.active.append(["Nome", "Cargo", "Email", "Ativo"])
-        workbook.active.append(["Nova Pessoa", "Analista", "nova@empresa.com", "SIM"])
-        payload = BytesIO()
-        workbook.save(payload)
-        payload.seek(0)
-        created = client.post("/admin/import", data={
-            "csrf_token": token,
-            "action": "validate",
-            "file": (payload, "rh_nova.xlsx"),
-        }, content_type="multipart/form-data")
-        assert "Validação concluída" in created.text
-        assert "rh_nova.xlsx" in created.text
-        stored_name = created.text.split('name="stored_name" value="', 1)[1].split('"', 1)[0]
-        token = created.text.split('name="csrf_token" value="', 1)[1].split('"', 1)[0]
-        confirmed = client.post("/admin/import", data={
-            "csrf_token": token,
-            "action": "confirm",
-            "stored_name": stored_name,
-        }, follow_redirects=True)
-        assert "Carga pendente confirmada" in confirmed.text
+        dashboard = client.get("/admin")
+        assert "Cargas pendentes" not in dashboard.text
+        assert client.get("/admin/import").status_code == 404
 
     assert database_path.read_bytes() == before
-    assert list((tmp_path / "pending").glob("*.xlsx"))
 
 
 def test_admin_dashboard_shows_central_publication_status(tmp_path):
     database_path = _corporate_database(tmp_path / "corporate.db")
+    log_path = tmp_path / "requests.jsonl"
+    append_request_log(log_path, "maria@empresa.com", "requested", "aguardando análise")
     users_path = Path(__file__).resolve().parent.parent / "config" / "users.json"
     app = create_app(test_config={
         "TESTING": True,
@@ -636,6 +613,7 @@ def test_admin_dashboard_shows_central_publication_status(tmp_path):
         "ADMIN_USERS_PATH": str(users_path),
         "ADMIN_USERS_DB_PATH": str(tmp_path / "admin_users.db"),
         "SIGNATURE_APPROVALS_PATH": str(tmp_path / "approvals.db"),
+        "REQUEST_LOG_PATH": str(log_path),
     })
     with app.test_client() as client:
         login_page = client.get("/admin/login")
@@ -645,6 +623,20 @@ def test_admin_dashboard_shows_central_publication_status(tmp_path):
         assert page.status_code == 200
         assert "Base corporativa RH" in page.text
         assert "Leitura direta da publicação central" in page.text
+        collaborators = client.get("/admin/colaboradores")
+        assert "Colaboradores ativos — base RH central" in collaborators.text
+    with app.test_client() as client:
+        login_page = client.get("/admin/login")
+        token = login_page.text.split('name="csrf_token" value="', 1)[1].split('"', 1)[0]
+        client.post("/admin/login", data={
+            "username": "roberson.souza", "password": "roberson.souza", "csrf_token": token,
+        })
+        approvals = client.get("/admin/solicitacoes")
+        assert "Assinaturas pendentes de análise" in approvals.text
+        assert "Assinaturas respondidas" in approvals.text
+        assert "Solicitações recentes" in approvals.text
+        assert "request-log-scroll" in approvals.text
+        assert "aguardando análise" in approvals.text
 
 
 def test_employee_can_update_phone_before_generating_signature(tmp_path, monkeypatch):

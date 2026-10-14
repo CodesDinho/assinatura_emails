@@ -111,6 +111,11 @@ th, td { padding: 10px; border-bottom: 1px solid #e3e7ed; text-align: left; vert
 .signature-state.generated { background: #d9f5e7; color: #146c43; }
 .signature-state.pending { background: #eef1f5; color: #596575; }
 .signature-state.inactive, .signature-state.not-generated { background: #fbe8e8; color: #a32929; }
+.approval-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 24px; }
+.pending-count { flex: 0 0 auto; padding: 10px 16px; border-radius: 999px; background: #fff1cc; color: #7a5200; }
+.pending-approvals-table { border: 2px solid #e0ab32; border-radius: 10px; }
+.request-log-scroll { max-height: 360px; overflow: auto; border: 1px solid #dfe4ea; border-radius: 8px; }
+.request-log-scroll thead { position: sticky; top: 0; z-index: 1; background: #fff; }
 .override-state { display: inline-block; margin-left: 5px; padding: 2px 6px; border-radius: 999px; background: #fff1cc; color: #765500; font-size: 0.72rem; font-weight: bold; }
 .table-actions { display: flex; align-items: center; gap: 7px; min-width: 145px; padding-right: 2px; }
 .table-actions form { margin: 0; }

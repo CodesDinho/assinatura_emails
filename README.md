@@ -23,7 +23,7 @@ GitHub Actions testa o projeto e publica imagens imutáveis no GHCR. O Portainer
 
 A stack monta `/home/administrator/Desktop/codes/ti_dinho_slack/shared_data` em `/shared:ro` e lê `/shared/slack_apps.db`. O serviço só fica saudável quando existem `rh_importacoes`, a view `rh_assinaturas_colaboradores` e uma publicação `PUBLICADO`. Verifique em `http://10.1.1.153:8505/health`.
 
-O upload administrativo apenas valida e guarda o arquivo em `/app/data/pending_imports`; ele não grava no SQLite nem altera vínculos publicados. Para efetivar uma carga, solicite à TI a etapa 4 — Analisar Email/SharePoint x RH — no projeto de equalização e a publicação da prévia homologada.
+Não há upload ou sincronização manual de colaboradores neste projeto. Toda inclusão, alteração e publicação deve ocorrer no projeto de equalização; o projeto de assinaturas apenas consome a view corporativa publicada.
 
 A listagem administrativa é somente leitura e exibe ID central, matrícula RH, nome, cargo, empresa,
 e-mail e celular diretamente da view. Não existe sobreposição por planilha ou

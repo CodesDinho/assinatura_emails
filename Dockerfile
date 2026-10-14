@@ -3,7 +3,6 @@ FROM python:3.12-slim
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     SHARED_SQLITE_PATH=/shared/slack_apps.db \
-    PENDING_IMPORTS_PATH=/app/data/pending_imports \
     REQUEST_LOG_PATH=/app/instance/request_logs.jsonl \
     GENERATED_FILES_PATH=/app/instance/generated \
     ADMIN_USERS_PATH=/app/config/users.json

@@ -11,13 +11,7 @@ from app.services.admin_auth import (
     authenticate_user, create_admin_user, delete_admin_user, list_active_users, update_admin_user,
 )
 from app.services.email_sender import send_approval_request_email, send_rejection_email, send_signature_email
-from app.services.employee_importer import (
-    build_employee_record,
-    normalize_email,
-    normalize_text,
-    read_employee_rows,
-    validate_employee_row,
-)
+from app.services.employee_importer import normalize_email, normalize_text
 from app.services.corporate_employee_store import (
     equalization_status,
     find_employee_by_email,
@@ -25,7 +19,6 @@ from app.services.corporate_employee_store import (
     lorac_coverage,
     readiness_summary,
 )
-from app.services.pending_import_store import confirm_pending_import, list_pending_imports, save_pending_import
 from app.services.request_log import append_request_log, recent_request_logs, successful_request_emails
 from app.services.signature_generator import generate_signature_image
 from app.services.signature_approval_store import (
@@ -388,15 +381,18 @@ def register_routes(app):
     @app.route("/admin/solicitacoes")
     @_signature_validator_required
     def admin_signature_requests():
-        return render_template("admin_signature_requests.html", approval_rows=list_signature_requests())
+        approval_rows = list_signature_requests()
+        return render_template(
+            "admin_signature_requests.html",
+            pending_rows=[row for row in approval_rows if row["status"] in {"pending", "failed", "sending"}],
+            answered_rows=[row for row in approval_rows if row["status"] in {"approved", "rejected"}],
+            request_rows=recent_request_logs(current_app.config["REQUEST_LOG_PATH"], limit=100),
+        )
 
     @app.route("/admin/solicitacoes-recentes")
     @_admin_manager_required
     def admin_recent_requests():
-        return render_template(
-            "admin_recent_requests.html",
-            request_rows=recent_request_logs(current_app.config["REQUEST_LOG_PATH"], limit=100),
-        )
+        return redirect(url_for("admin_signature_requests", _anchor="solicitacoes-recentes"))
 
     @app.route("/admin/usuarios/novo", methods=["POST"])
     @_admin_manager_required
@@ -669,73 +665,6 @@ def register_routes(app):
             "Use a revisão RH/Lorac na base central."
         )
         return redirect(url_for("admin_collaborators"))
-
-    @app.route("/admin/import", methods=["GET", "POST"])
-    @_admin_manager_required
-    def admin_import():
-        pending_imports = list_pending_imports(current_app.config["PENDING_IMPORTS_PATH"])
-        if request.method == "POST":
-            if not _valid_csrf():
-                flash("A sessão expirou. Tente novamente.")
-                return render_template("admin_import.html", pending_imports=pending_imports), 400
-            if request.form.get("action") == "confirm":
-                try:
-                    result = confirm_pending_import(
-                        current_app.config["PENDING_IMPORTS_PATH"],
-                        request.form.get("stored_name", ""),
-                        uploaded_by=session["admin_user"]["username"],
-                    )
-                except (OSError, ValueError) as exc:
-                    flash(str(exc))
-                    return redirect(url_for("admin_import"))
-                flash(
-                    f"Carga pendente confirmada: {result['filename']} — {result['row_count']} colaboradores. "
-                    "A base corporativa não foi alterada; a TI deve homologar e publicar a carga no projeto de equalização."
-                )
-                return redirect(url_for("admin_import"))
-            uploaded = request.files.get("file")
-            if not uploaded or not uploaded.filename:
-                flash("Selecione um arquivo CSV ou XLSX.")
-                return render_template("admin_import.html", pending_imports=pending_imports)
-            data = read_employee_rows(uploaded.stream, uploaded.filename)
-            preview, duplicates, errors, seen = [], [], [], set()
-            without_email = 0
-            for row in data:
-                record = build_employee_record(row)
-                # A base oficial do RH também pode conter colaboradores ainda sem
-                # e-mail. Eles permanecem no cadastro, mas não conseguem consultar
-                # uma assinatura até que o endereço seja preenchido.
-                validation_issues = validate_employee_row(row, require_email=False)
-                if validation_issues:
-                    errors.append({"row": row, "issues": validation_issues})
-                    continue
-                email = record["email"]
-                if email and email in seen:
-                    duplicates.append(email)
-                    continue
-                if email:
-                    seen.add(email)
-                else:
-                    without_email += 1
-                preview.append(record)
-            if errors or duplicates:
-                return render_template("admin_import.html", preview=preview, errors=errors, duplicates=duplicates, pending_imports=pending_imports)
-            filename = Path(uploaded.filename).name
-            result = save_pending_import(
-                current_app.config["PENDING_IMPORTS_PATH"],
-                uploaded.stream,
-                filename,
-                uploaded_by=session["admin_user"]["username"],
-                row_count=len(preview),
-                valid_email_count=len(preview) - without_email,
-                missing_email_count=without_email,
-                status="AGUARDANDO_CONFIRMACAO",
-            )
-            return render_template(
-                "admin_import.html", preview=preview[:20], staged_import=result,
-                pending_imports=list_pending_imports(current_app.config["PENDING_IMPORTS_PATH"]),
-            )
-        return render_template("admin_import.html", pending_imports=pending_imports)
 
     @app.route("/admin/logout", methods=["POST"])
     @_admin_login_required

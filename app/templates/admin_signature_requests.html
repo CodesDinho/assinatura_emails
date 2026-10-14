@@ -1,3 +1,18 @@
 {% extends 'base.html' %}
-{% block title %}Aprovar assinaturas{% endblock %}
-{% block content %}<section class="card wide-card"><h1>Aprovar assinaturas pendentes</h1><p>Revise as imagens antes de autorizar o envio ao solicitante.</p><div class="table-wrapper"><table><thead><tr><th>Solicitante</th><th>Cargo</th><th>Celular</th><th>Solicitada em</th><th>Status</th><th>Ação</th></tr></thead><tbody>{% for approval in approval_rows %}<tr><td>{{ approval['employee_name'] }}<br><small>{{ approval['employee_email'] }}</small></td><td>{{ approval['job_title'] or '—' }}</td><td>{{ approval['phone'] or '—' }}</td><td>{{ approval['created_at'] }}</td><td><span class="signature-state {{ 'generated' if approval['status'] == 'approved' else 'pending' }}">{{ {'pending': 'Pendente', 'sending': 'Enviando', 'approved': 'Aprovada', 'failed': 'Falha', 'rejected': 'Não aprovada'}[approval['status']] }}</span></td><td><a class="table-action" href="{{ url_for('admin_signature_request', request_id=approval['request_id']) }}">{{ 'Revisar e aprovar' if approval['status'] in ('pending', 'failed') else 'Ver detalhes' }}</a></td></tr>{% else %}<tr><td colspan="6">Nenhuma assinatura aguardando validação.</td></tr>{% endfor %}</tbody></table></div></section>{% endblock %}
+{% block title %}Análise de assinaturas{% endblock %}
+{% block content %}
+<section class="card wide-card">
+  <div class="approval-heading"><div><h1>Assinaturas pendentes de análise</h1><p>Revise as imagens antes de autorizar o envio ao solicitante.</p></div><strong class="pending-count">{{ pending_rows|length }} pendente(s)</strong></div>
+  <div class="table-wrapper pending-approvals-table"><table><thead><tr><th>Solicitante</th><th>Cargo</th><th>Celular</th><th>Solicitada em</th><th>Status</th><th>Ação</th></tr></thead><tbody>
+  {% for approval in pending_rows %}<tr><td>{{ approval['employee_name'] }}<br><small>{{ approval['employee_email'] }}</small></td><td>{{ approval['job_title'] or '—' }}</td><td>{{ approval['phone'] or '—' }}</td><td>{{ approval['created_at'] }}</td><td><span class="signature-state pending">{{ {'pending': 'Pendente', 'sending': 'Enviando', 'failed': 'Falha no envio'}[approval['status']] }}</span></td><td><a class="table-action" href="{{ url_for('admin_signature_request', request_id=approval['request_id']) }}">{{ 'Ver processamento' if approval['status'] == 'sending' else 'Revisar e aprovar' }}</a></td></tr>
+  {% else %}<tr><td colspan="6">Nenhuma assinatura aguardando análise.</td></tr>{% endfor %}
+  </tbody></table></div>
+  <h2>Assinaturas respondidas</h2><p>Aprovadas e não aprovadas que já receberam uma decisão.</p>
+  <div class="table-wrapper"><table><thead><tr><th>Solicitante</th><th>Cargo</th><th>Solicitada em</th><th>Respondida em</th><th>Status</th><th>Ação</th></tr></thead><tbody>
+  {% for approval in answered_rows %}<tr><td>{{ approval['employee_name'] }}<br><small>{{ approval['employee_email'] }}</small></td><td>{{ approval['job_title'] or '—' }}</td><td>{{ approval['created_at'] }}</td><td>{{ approval['reviewed_at'] or '—' }}</td><td><span class="signature-state {{ 'generated' if approval['status'] == 'approved' else 'inactive' }}">{{ 'Aprovada' if approval['status'] == 'approved' else 'Não aprovada' }}</span></td><td><a class="table-action" href="{{ url_for('admin_signature_request', request_id=approval['request_id']) }}">Ver detalhes</a></td></tr>
+  {% else %}<tr><td colspan="6">Nenhuma assinatura respondida.</td></tr>{% endfor %}
+  </tbody></table></div>
+  <h2 id="solicitacoes-recentes">Solicitações recentes</h2><p>Histórico técnico das solicitações e dos envios.</p>
+  <div class="table-wrapper request-log-scroll" tabindex="0" aria-label="Histórico de solicitações recentes"><table><thead><tr><th>Data</th><th>Status</th><th>E-mail</th><th>Detalhes</th></tr></thead><tbody>{% for log in request_rows %}<tr><td>{{ log['created_at'] }}</td><td>{{ log['status'] }}</td><td>{{ log['normalized_email'] }}</td><td>{{ log['details'] or '—' }}</td></tr>{% else %}<tr><td colspan="4">Nenhuma solicitação registrada.</td></tr>{% endfor %}</tbody></table></div>
+</section>
+{% endblock %}

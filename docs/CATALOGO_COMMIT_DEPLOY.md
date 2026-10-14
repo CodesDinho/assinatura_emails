@@ -111,7 +111,7 @@ O pipeline deve publicar exatamente esse padrão de tag. Tags imutáveis por SHA
 
 O SQLite corporativo não faz parte da imagem nem do Git. Ele é montado do host em `/shared:ro` e deve ser publicado pelo projeto de equalização. Antes do deploy, confirme uma publicação `PUBLICADO` em `rh_importacoes` e a view `rh_assinaturas_colaboradores`.
 
-Uploads feitos nesta aplicação ficam em `/app/data/pending_imports` e não alteram a base publicada. Após um upload, a TI deve executar a etapa 4 — Analisar Email/SharePoint x RH — no projeto de equalização, homologar a prévia e publicá-la. A planilha legada permanece apenas para rollback controlado.
+Não há upload nem sincronização manual de colaboradores nesta aplicação. A TI deve homologar e publicar os dados no projeto de equalização; este projeto consulta diretamente a view corporativa. A planilha legada permanece apenas para rollback controlado.
 
 A publicação é incremental e auditável: registros ausentes são inativados, não apagados. A
 publicação deve ser bloqueada tanto para identidades técnicas repetidas quanto para um e-mail válido

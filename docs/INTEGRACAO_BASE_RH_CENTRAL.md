@@ -11,8 +11,8 @@ O projeto de assinaturas não mantém uma cópia própria da base de colaborador
 - Falha segura: sem publicação válida, a consulta pública e o healthcheck ficam bloqueados.
 - Escrita: este projeto nunca altera tabelas `rh_*` e monta `/shared` como `:ro`.
 
-## Carga enviada no projeto de assinaturas
+## Atualização dos colaboradores
 
-O upload administrativo é apenas uma entrada pendente para conferência. Primeiro o sistema valida o arquivo e mostra os totais de registros, e-mails válidos e e-mails ausentes. Somente após confirmação ele marca o arquivo como `PENDENTE`. Isso não publica dados nem altera a base central.
+Não existe carga local neste projeto. Inclusões, alterações e publicações são realizadas exclusivamente no projeto de equalização. O projeto de assinaturas consome diretamente a view corporativa publicada.
 
 O painel administrativo exibe a última publicação reconhecida e os totais de colaboradores ativos, aptos para assinatura e sem e-mail válido. Não existe sincronização manual entre os dois projetos.

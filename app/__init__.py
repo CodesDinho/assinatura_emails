@@ -17,7 +17,6 @@ def create_app(test_config=None):
     app.config.from_mapping(
         SECRET_KEY=os.getenv("SECRET_KEY", "dev-secret-key"),
         SHARED_SQLITE_PATH=os.getenv("SHARED_SQLITE_PATH", "/shared/slack_apps.db"),
-        PENDING_IMPORTS_PATH=os.getenv("PENDING_IMPORTS_PATH", str(BASE_DIR / "data" / "pending_imports")),
         ADMIN_USERS_PATH=os.getenv("ADMIN_USERS_PATH", str(BASE_DIR / "config" / "users.json")),
         ADMIN_USERS_DB_PATH=os.getenv("ADMIN_USERS_DB_PATH", str(INSTANCE_DIR / "admin_users.db")),
         REQUEST_LOG_PATH=os.getenv("REQUEST_LOG_PATH", str(INSTANCE_DIR / "request_logs.jsonl")),
